@@ -21,6 +21,8 @@ description:         Please see the README on GitHub at <https://codeberg.org/0r
 
 dependencies:
 - base >= 4.7 && < 5
+- vector
+- transformers
 
 ghc-options:
 - -Wall
@@ -29,6 +31,7 @@ ghc-options:
 - -Wincomplete-record-updates
 - -Wincomplete-uni-patterns
 # - -Wmissing-export-lists
+- -Wno-unused-binds # to temporarly prevent annoying lsp msgs
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
