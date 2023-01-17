@@ -1,6 +1,15 @@
 module Main (main) where
 
-import Lib
+import Brainhuck.Interpreter 
+import Brainhuck.Options
+import Options.Applicative (execParser)
 
 main :: IO ()
-main = helloWorld
+main = do
+  (Options optsSize optsInput ) <- execParser options
+  programString <- case optsInput of
+                     FileInput filePath -> readFile filePath
+                     StdInput stdinStr -> pure stdinStr
+  interpretBF optsSize programString
+   
+  -- helloWorld

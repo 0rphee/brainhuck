@@ -22,6 +22,7 @@ dependencies:
 - base >= 4.7 && < 5
 - vector
 - transformers
+- optparse-applicative
 
 ghc-options:
 - -Wall
@@ -39,10 +40,11 @@ library:
   source-dirs: src
 
 executables:
-  brainhuck-exe:
+  brainhuck:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
+    - -O2
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N

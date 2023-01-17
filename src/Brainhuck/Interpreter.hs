@@ -1,12 +1,13 @@
-module Lib
+module Brainhuck.Interpreter
   (
     helloWorld
+  , interpretBF
   ) where
 
 import qualified Data.Vector as V
 import Data.Word ( Word8 )
 import Data.Maybe ( fromMaybe )
-import Control.Exception ( throw, Exception )
+import Control.Exception ( Exception, throw, throwIO )
 import Control.Monad ( void )
 -- import Debug.Trace ( trace )
 
@@ -82,7 +83,7 @@ currentCellIsZero (MkState _ mem ptr) = cellValue == 0
 loop :: String -> ProgramState -> IO ProgramState
 loop carry pState =
   case pState of                                                    -- myTrace "pState in loop: "
-    MkState [] _ _           -> throw NoMatchingBracketException
+    MkState [] _ _           -> putChar '\n' >> throwIO NoMatchingBracketException
     cst@(MkState (']':xs) mem ptr) ->                               -- trace "\tinside (]:xs)" $ 
       if currentCellIsZero cst                                      -- myTrace "\tTerminaLoop: " $
       then execute $ MkState xs mem ptr
@@ -122,6 +123,12 @@ testState :: Bool -> ProgramState -> IO ()
 testState printAll testSt = if printAll
                             then execute testSt >>= print
                             else void (execute testSt)
+
+ 
+-- | Interprets a Brainfuck program, using a given a size for the memory.
+interpretBF :: Int -> String -> IO ()
+interpretBF memSize program =
+  void $ execute (initialState memSize program)
 
 helloWorld :: IO ()
 helloWorld = testState False $ initialState 10 helloWorldProgram
