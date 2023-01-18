@@ -12,19 +12,28 @@ data Input
 
 data Options
   = Options
-      { oSize  :: Int
+      { oDebug :: Bool
+      , oSize  :: Int
       , oInput :: Input
       }
 
 options :: ParserInfo Options
 options = info (opts <**> helper )
   (  fullDesc
-  <> progDesc "Interpet a Brainfuck program "
-  <> header "Brainhuck - a Brainfuck interpeter written in Haskell"
+  <> header "Brainhuck - a Brainfuck interpreter written in Haskell"
   )
-
+ 
 opts :: Parser Options
-opts = Options <$> size <*> input
+opts = Options <$> debug <*> size <*> input
+
+debug :: Parser Bool
+debug = switch 
+  (
+    long "debug"
+  <> short 'd'
+  <> help "Run in debugging mode"
+  <> showDefault
+  )
 
 size :: Parser Int
 size = option auto
@@ -50,6 +59,6 @@ inputString = strArgument
 inputType :: Parser (String -> Input)
 inputType = flag FileInput StdInput
   (  long "stdin"
-  <> help "Read from stdin"
+  <> help "Read BF program from stdin"
   )
 

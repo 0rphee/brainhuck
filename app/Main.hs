@@ -6,10 +6,8 @@ import Options.Applicative (execParser)
 
 main :: IO ()
 main = do
-  (Options optsSize optsInput ) <- execParser options
+  (Options optsDebug optsSize optsInput ) <- execParser options
   programString <- case optsInput of
                      FileInput filePath -> readFile filePath
                      StdInput stdinStr -> pure stdinStr
-  interpretBF optsSize programString
-   
-  -- helloWorld
+  interpretBF optsDebug optsSize programString
