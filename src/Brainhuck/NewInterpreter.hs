@@ -60,21 +60,21 @@ parseProgram strProgram = Program . snd <$> go False strProgram S.empty
         go isLoopOpen [] instructions = if isLoopOpen
                                         then Right ("", instructions)
                                         else Left BracketsNotClosed
-        go isLoopOpen (x:xs) instructions =
-          case x of
-          '>' -> go isLoopOpen xs $ instructions S.|> IncPointer
-          '<' -> go isLoopOpen xs $ instructions S.|> DecPointer
-          '+' -> go isLoopOpen xs $ instructions S.|> IncCell
-          '-' -> go isLoopOpen xs $ instructions S.|> DecCell
-          ',' -> go isLoopOpen xs $ instructions S.|> GetChar
-          '.' -> go isLoopOpen xs $ instructions S.|> PutChar
-          '[' -> case go True xs S.empty of
-                   Left e -> Left e
-                   Right (accum, instructs) -> 
-                     go isLoopOpen accum $ instructions S.|> Loop (Program instructs)
+        go isLoopOpen (x:xs) instructions 
+          = let addCommonInstruction inst = go isLoopOpen xs $ instructions S.|> inst
+             in case x of
+                 '>' -> addCommonInstruction IncPointer
+                 '<' -> addCommonInstruction DecPointer
+                 '+' -> addCommonInstruction IncCell
+                 '-' -> addCommonInstruction DecCell
+                 ',' -> addCommonInstruction GetChar
+                 '.' -> addCommonInstruction PutChar
+                 '[' -> case go True xs S.empty of
+                          Left e -> Left e
+                          Right (accum, instructs) -> 
+                            go isLoopOpen accum $ instructions S.|> Loop (Program instructs)
          
-          ']' -> if isLoopOpen
-                 then Right (xs, instructions)
-                 else Left BracketsNotClosed
-          _   -> go isLoopOpen xs instructions
-
+                 ']' -> if isLoopOpen
+                        then Right (xs, instructions)
+                        else Left BracketsNotClosed
+                 _   -> go isLoopOpen xs instructions
