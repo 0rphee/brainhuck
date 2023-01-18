@@ -16,7 +16,7 @@ brainhuck path/to/program.b
 
 brainhuck --stdin ">>>>+"
 
-brainhuck program.b -d -s 100
+brainhuck program.b -d -s 100 > debug.txt
 ```
 
 Flags/Options:   
