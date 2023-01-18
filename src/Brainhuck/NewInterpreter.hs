@@ -1,8 +1,20 @@
-module Brainhuck.NewInterpreter where
+module Brainhuck.NewInterpreter () where
 
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import Data.Word (Word8)
+import Control.Exception
+import Data.Maybe (fromMaybe)
+
+-- =====================================================================
+-- Types
+
+data BrainhuckException
+  = InexistentCellValueException
+  | NoMatchingBracketException
+  deriving (Show)
+
+instance Exception BrainhuckException
 
 type Pointer = Int
 type MemoryCell = Word8
@@ -10,30 +22,59 @@ type MemoryCell = Word8
 type Memory = V.Vector MemoryCell
 
 newtype Program = Program (S.Seq Instruction)
+  deriving Show
 
-data Instruction 
+data Instruction
   = IncPointer    --  >
   | DecPointer    --  <
   | IncCell       --  +
   | DecCell       --  -
   | GetChar       --  ,
   | PutChar       --  .
-  | Loop Program  -- [
+  | Loop Program  --  [
+instance Show Instruction where
+  show IncPointer  = '_' : (">"    <>" ")
+  show DecPointer  = '_' : ("<"    <>" ")
+  show IncCell     = '_' : ("+"    <>" ")
+  show DecCell     = '_' : ("-"    <>" ")
+  show GetChar     = '_' : (","    <>" ")
+  show PutChar     = '_' : ("."    <>" ")
+  show (Loop prog) = '_' : ("LOOP" <>" " <> show prog)
 
-data ProgramState 
-  = PGST 
+data ProgramState
+  = MkState
       { getProgram :: Program
       , getMemory  :: Memory
-      , getPointer :: Pointer  
-      } 
+      , getPointer :: Pointer
+      }
 
+data Error = BracketsNotClosed
+  deriving Show
 
-pointerOperation :: (Pointer -> Pointer) -> ProgramState -> ProgramState
-pointerOperation operation (PGST prog mem ptr) = PGST prog mem (operation ptr)
+-- =====================================================================
+-- Parsing
 
-
-
-
-
--- data ProgramState = MkState { program :: []}
+parseProgram :: String -> Either Error Program
+parseProgram strProgram = Program . snd <$> go False strProgram S.empty
+  where go :: Bool -> String -> S.Seq Instruction -> Either Error (String, S.Seq Instruction)
+        go isLoopOpen [] instructions = if isLoopOpen
+                                        then Right ("", instructions)
+                                        else Left BracketsNotClosed
+        go isLoopOpen (x:xs) instructions =
+          case x of
+          '>' -> go isLoopOpen xs $ instructions S.|> IncPointer
+          '<' -> go isLoopOpen xs $ instructions S.|> DecPointer
+          '+' -> go isLoopOpen xs $ instructions S.|> IncCell
+          '-' -> go isLoopOpen xs $ instructions S.|> DecCell
+          ',' -> go isLoopOpen xs $ instructions S.|> GetChar
+          '.' -> go isLoopOpen xs $ instructions S.|> PutChar
+          '[' -> case go True xs S.empty of
+                   Left e -> Left e
+                   Right (accum, instructs) -> 
+                     go isLoopOpen accum $ instructions S.|> Loop (Program instructs)
+         
+          ']' -> if isLoopOpen
+                 then Right (xs, instructions)
+                 else Left BracketsNotClosed
+          _   -> go isLoopOpen xs instructions
 
