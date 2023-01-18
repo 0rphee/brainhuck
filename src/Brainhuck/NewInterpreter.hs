@@ -78,3 +78,62 @@ parseProgram strProgram = Program . snd <$> go False strProgram S.empty
                         then Right (xs, instructions)
                         else Left BracketsNotClosed
                  _   -> go isLoopOpen xs instructions
+
+
+
+
+-- =====================================================================
+-- Execution of Brainfuck operations 
+
+-- | Primitive function to modify the `Pointer` in `ProgramState`
+pointerOperation :: (Pointer -> Pointer) -> ProgramState -> ProgramState
+pointerOperation operation (MkState prog mem ptr)
+  = MkState prog mem (operation ptr)
+
+incPointer :: ProgramState -> ProgramState
+incPointer = pointerOperation (+1)
+
+decPointer :: ProgramState -> ProgramState
+decPointer = pointerOperation (\x -> x - 1)
+
+-- | Helper Function
+getCurrCellValue :: Memory -- ^ the Memory Vector
+  -> Pointer -- ^ index currently pointed at 
+  -> MemoryCell
+getCurrCellValue mem ptr
+  = fromMaybe (throw InexistentCellValueException) (mem V.!? ptr)
+
+-- | Primitive function to modify the `MemoryCell` currently pointed at in `ProgramState`
+cellOperation :: (MemoryCell -> MemoryCell) -> ProgramState -> ProgramState
+cellOperation op (MkState str mem ptr) = MkState str (mem V.// [(ptr, op cellValue)]) ptr
+  where cellValue = getCurrCellValue mem ptr
+
+-- | Increment Cell value in current pointer value
+incCell :: ProgramState -> ProgramState
+incCell = cellOperation (+1)
+
+-- | Decrement Cell value in current pointer value
+decCell :: ProgramState -> ProgramState
+decCell = cellOperation (\x -> x - 1)
+
+-- | Value in current pointer location is printed
+pChar :: ProgramState -> IO ProgramState
+pChar (MkState str mem ptr) = do
+  let cellValue = getCurrCellValue mem ptr
+  putChar $ (toEnum . fromIntegral) cellValue -- converts to char the cellValue (int)
+  pure $ MkState str mem ptr
+
+-- | Input from the user is saved in pointer location
+gChar :: ProgramState -> IO ProgramState
+gChar (MkState str mem ptr) = do
+  readCharValue <- fromIntegral . fromEnum <$> getChar
+  putChar '\n'
+  let modifiedMem = mem V.// [(ptr, readCharValue)]
+  pure $ MkState str modifiedMem ptr
+
+-- | Validates if currently pointed at location is 0
+currentCellIsZero :: ProgramState -> Bool
+currentCellIsZero (MkState _ mem ptr) = cellValue == 0
+  where cellValue = getCurrCellValue mem ptr
+
+
