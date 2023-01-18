@@ -10,8 +10,8 @@ and this project adheres to the
 
 ### Added
 
-The essential functionality for the library of the package is implemented
-and the executable runs a "Hello World!" example in brainfuck.
+The essential functionality for the library and executable of the package is implemented. 
+Nested loops are yet to be handled properley.
 
 ## 0.1.0.0 - YYYY-MM-DD
 
