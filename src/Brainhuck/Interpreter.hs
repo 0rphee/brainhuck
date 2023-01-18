@@ -10,7 +10,6 @@ import Data.Word ( Word8 )
 import Data.Maybe ( fromMaybe )
 import Control.Exception ( Exception, throw, throwIO )
 import Control.Monad ( void, when )
-import Control.Exception.Base (finally)
 
 -- =====================================================================
 -- TYPES 
@@ -46,19 +45,7 @@ incPointer = pointerOperation (+1)
 decPointer :: ProgramState -> ProgramState
 decPointer = pointerOperation (\x -> x - 1)
 
--- Helper Function
-getCurrCellValueDebug :: Show a => Bool -- ^ debug flag
-  -> V.Vector a -- ^ the Memory Vector
-  -> Pointer -- ^ index currently pointed at 
-  -> IO a
-getCurrCellValueDebug debug mem ptr = do -- fromMaybe (throw InexistentCellValueException) (mem V.!? ptr)
-  let cellVal = mem V.!? ptr
-  case cellVal of
-    Nothing -> if debug
-               then putStrLn ("\n" <> show mem <> " ptr: " <> show ptr) >> throw InexistentCellValueException
-               else throw InexistentCellValueException
-    Just a -> pure a
-
+-- | Helper Function
 getCurrCellValue :: V.Vector a -- ^ the Memory Vector
   -> Pointer -- ^ index currently pointed at 
   -> a
