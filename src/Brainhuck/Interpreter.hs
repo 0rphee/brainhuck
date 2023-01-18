@@ -1,8 +1,8 @@
 {-# LANGUAGE TupleSections #-}
 module Brainhuck.Interpreter
-  ( 
+  (
     interpretBF
-  ) 
+  )
   where
 
 import qualified Data.Vector as V
@@ -10,6 +10,7 @@ import Data.Word ( Word8 )
 import Data.Maybe ( fromMaybe )
 import Control.Exception ( Exception, throw, throwIO )
 import Control.Monad ( void, when )
+import Control.Exception.Base (finally)
 
 -- =====================================================================
 -- TYPES 
@@ -46,10 +47,23 @@ decPointer :: ProgramState -> ProgramState
 decPointer = pointerOperation (\x -> x - 1)
 
 -- Helper Function
+getCurrCellValueDebug :: Show a => Bool -- ^ debug flag
+  -> V.Vector a -- ^ the Memory Vector
+  -> Pointer -- ^ index currently pointed at 
+  -> IO a
+getCurrCellValueDebug debug mem ptr = do -- fromMaybe (throw InexistentCellValueException) (mem V.!? ptr)
+  let cellVal = mem V.!? ptr
+  case cellVal of
+    Nothing -> if debug
+               then putStrLn ("\n" <> show mem <> " ptr: " <> show ptr) >> throw InexistentCellValueException
+               else throw InexistentCellValueException
+    Just a -> pure a
+
 getCurrCellValue :: V.Vector a -- ^ the Memory Vector
   -> Pointer -- ^ index currently pointed at 
   -> a
 getCurrCellValue mem ptr = fromMaybe (throw InexistentCellValueException) (mem V.!? ptr)
+
 
 -- | Primitive function to modify the `MemoryCell` currently pointed at in `ProgramState`
 cellOperation :: (MemoryCell -> MemoryCell) -> ProgramState -> ProgramState
@@ -102,12 +116,12 @@ loopDebug :: Int -- ^ loop-depth, only used for debugging
   -> IO (String, ProgramState)
 loopDebug depth carry (internalCarry, pState) = do
   let carry' = internalCarry <> carry
-  putStr $ "L " <> show depth <> ":\t" <> program pState <> " | carry:\t" <> carry
+  putStr $ "L " <> show depth <> ":\t" <> (unwords . words . program) pState <> " | carry:\t" <> carry <> "\t" <> show (pointer pState)
   case pState of
     MkState [] _ _                 -> putChar '\n' >> throwIO NoMatchingBracketException
     cst@(MkState (']':xs) mem ptr) -> do
       putStr "\tinside (]:xs)"
-      exitLoop <- myPrint "\tTerminalLoop? " (currentCellIsZero cst)
+      exitLoop <- myPrint "\tExitLoop? " (currentCellIsZero cst)
       if exitLoop
       then pure (']':carry', MkState xs mem ptr)
       else loopDebug depth "" (internalCarry, MkState (reverse carry <> "]" <> xs) mem ptr)
