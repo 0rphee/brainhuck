@@ -15,6 +15,7 @@ data Options
       { oDebug :: Bool
       , oSize  :: Int
       , oInput :: Input
+      , oOldInterpreter :: Bool
       }
 
 options :: ParserInfo Options
@@ -24,7 +25,18 @@ options = info (opts <**> helper )
   )
  
 opts :: Parser Options
-opts = Options <$> debug <*> size <*> input
+opts = Options <$> debug <*> size <*> input <*> oldInterpreter
+
+
+oldInterpreter :: Parser Bool
+oldInterpreter = switch
+  (
+     long "old-interpeter"
+  <> short 'o'
+  <> help "Use the old interpeter to execute code"
+  <> showDefault
+  )
+
 
 debug :: Parser Bool
 debug = switch 
