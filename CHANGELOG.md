@@ -11,7 +11,6 @@ and this project adheres to the
 ### Added
 
 The essential functionality for the library and executable of the package is implemented. 
-Nested loops are yet to be handled properley.
 
 ## 0.1.0.0 - YYYY-MM-DD
 
