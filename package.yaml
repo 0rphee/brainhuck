@@ -51,6 +51,20 @@ executables:
     dependencies:
     - brainhuck
 
+benchmarks:
+  brainhuck-benchmarks:
+    main:                Bench.hs
+    source-dirs:         bench
+    ghc-options:
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - brainhuck
+    - criterion
+    
+
 tests:
   brainhuck-test:
     main:                Spec.hs
