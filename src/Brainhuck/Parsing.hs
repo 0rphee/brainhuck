@@ -1,13 +1,13 @@
 module Brainhuck.Parsing where
 
-import Brainhuck.NewInterpreter
+import Brainhuck.Types
 import Data.Sequence as S
 
 -- =====================================================================
 -- Parsing
-parseProgram :: String -> Either Error Program
+parseProgram :: String -> Either ParsingError Program
 parseProgram strProgram = Program . snd <$> go False strProgram S.empty
-  where go :: Bool -> String -> S.Seq Instruction -> Either Error (String, S.Seq Instruction)
+  where go :: Bool -> String -> S.Seq Instruction -> Either ParsingError (String, S.Seq Instruction)
         go  loopOpen [] instructions =  if loopOpen  -- if the loop is open, the only valid condition to exit it, is with ']'
                                         then Left BracketsNotClosed
                                         else Right ("", instructions)

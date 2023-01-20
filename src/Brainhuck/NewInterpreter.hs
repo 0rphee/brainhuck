@@ -1,78 +1,24 @@
 module Brainhuck.NewInterpreter
   (
-    interpret
-  , Error(..)
-  , Program(..)
-  , ProgramState
-  , Instruction(..)
-  , BrainhuckException(..)
-  , initState
-  ,
+     tryToInterpret
   )
   where
 
-import qualified Data.Sequence as S
 import qualified Data.Vector as V
-import Data.Word (Word8)
 import Control.Exception
 import Data.Maybe (fromMaybe)
-import Data.Foldable (foldlM, Foldable (toList))
-
--- =====================================================================
--- Types
-
-data BrainhuckException
-  = InexistentCellValueException
-  | NoMatchingBracketException
-  deriving (Show)
-
-instance Exception BrainhuckException
-
-type Pointer = Int
-type MemoryCell = Word8
-
-type Memory = V.Vector MemoryCell
-
-data Instruction
-  = IncPointer    --  >
-  | DecPointer    --  <
-  | IncCell       --  +
-  | DecCell       --  -
-  | GetChar       --  ,
-  | PutChar       --  .
-  | Loop Program  --  [
-
-newtype Program = Program (S.Seq Instruction)
-
-instance Show Program where
-  show (Program seqq) = concatMap show $ toList seqq
-
-
-instance Show Instruction where
-  show IncPointer  = ">"
-  show DecPointer  = "<"
-  show IncCell     = "+"
-  show DecCell     = "-"
-  show GetChar     = ","
-  show PutChar     = "."
-  show (Loop prog) = " LOOP["  <> show prog <> "]"
-
-data ProgramState
-  = MkState Memory Pointer
-      -- { getMemory  :: Memory
-      -- , getPointer :: Pointer
-      -- }
-
-data Error = BracketsNotClosed
-  deriving Show
+import Data.Foldable (foldlM)
+import Brainhuck.Parsing (parseProgram)
+import Brainhuck.Types
+import Control.Monad (void)
 
 
 -- =====================================================================
 -- Interpret 
 
-initState :: Int -- ^ memory size
+initializeState :: Int -- ^ memory size
           -> ProgramState
-initState memSize = MkState cells 0
+initializeState memSize = MkState cells 0
  where cells = V.replicate memSize 0
 
 
@@ -85,8 +31,8 @@ myFoldM f initialState (Program instructions) =
 -- foldlM :: (b -> a -> m b) -> b -> t a -> m b 
   foldlM f initialState instructions
 
-exeInstruction :: ProgramState -> Instruction -> IO ProgramState
-exeInstruction (MkState mem ptr) instruction =
+executeInstruction :: ProgramState -> Instruction -> IO ProgramState
+executeInstruction (MkState mem ptr) instruction =
   case instruction of
      IncPointer -> pure $ MkState mem (ptr+1)
      DecPointer -> pure $ MkState mem (ptr-1)
@@ -106,15 +52,20 @@ exeInstruction (MkState mem ptr) instruction =
 
   where  loop :: Program -> ProgramState -> IO ProgramState
          loop loopProg pST@(MkState loopMem loopPtr') =
-          if currentCellIsZero loopMem loopPtr' 
+          if currentCellIsZero loopMem loopPtr'
           then pure pST -- exits loop
-          else interpret loopProg pST >>=  loop loopProg
+          else interpret' pST loopProg >>=  loop loopProg
 
 
+interpret' :: ProgramState -> Program -> IO ProgramState
+interpret' = myFoldM executeInstruction
 
-interpret :: Program -> ProgramState -> IO ProgramState
-interpret initialProgram initialState =
-  myFoldM exeInstruction initialState initialProgram
+tryToInterpret :: String -> Int -> IO ()
+tryToInterpret strProgram memSize =
+  either print  (void . interpret' initialState) parsingResult
+  where parsingResult = parseProgram strProgram
+        initialState = initializeState memSize
+
 
 
 -- =====================================================================

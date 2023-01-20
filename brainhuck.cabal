@@ -26,6 +26,7 @@ library
       Brainhuck.NewInterpreter
       Brainhuck.Options
       Brainhuck.Parsing
+      Brainhuck.Types
   other-modules:
       Paths_brainhuck
   hs-source-dirs:
