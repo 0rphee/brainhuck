@@ -8,7 +8,8 @@ module Brainhuck.Types
   , Instruction(..)
   , Program(..)
   , ProgramState(..)
-
+  , BFState (..)
+  , BenchState(..)
   )
   where
 
@@ -22,7 +23,8 @@ import Control.Exception
 -- Types
 
 data BrainhuckException
-  = InexistentCellValueException 
+  = InexistentCellValueException
+  | InexistentBenchmarkingInput
   deriving (Show)
 
 instance Exception BrainhuckException
@@ -49,7 +51,6 @@ newtype Program = Program (S.Seq Instruction)
 instance Show Program where
   show (Program seqq) = concatMap show $ toList seqq
 
-
 instance Show Instruction where
   show IncPointer  = ">"
   show DecPointer  = "<"
@@ -59,9 +60,12 @@ instance Show Instruction where
   show PutChar     = "."
   show (Loop prog) = " LOOP["  <> show prog <> "]"
 
+class BFState state where
+  executeInstruction :: state -> Instruction -> IO state
+  initializeState :: Int -> String -> state
+
+data BenchState = BenchState String Memory Pointer
+
 data ProgramState
   = MkState Memory Pointer
-      -- { getMemory  :: Memory
-      -- , getPointer :: Pointer
-      -- }
 

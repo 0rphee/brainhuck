@@ -1,3 +1,5 @@
+{-# LANGUAGE InstanceSigs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Brainhuck.NewInterpreter
   (
      tryToInterpret
@@ -16,56 +18,112 @@ import Control.Monad (void)
 -- =====================================================================
 -- Interpret 
 
-initializeState :: Int -- ^ memory size
-          -> ProgramState
-initializeState memSize = MkState cells 0
- where cells = V.replicate memSize 0
-
-
-myFoldM :: Monad m
-        => (ProgramState -> Instruction -> m ProgramState)
-        -> ProgramState
+myFoldM :: (Monad m)
+        => (st -> Instruction -> m st)
+        -> st
         -> Program
-        -> m ProgramState
+        -> m st
 myFoldM f initialState (Program instructions) =
 -- foldlM :: (b -> a -> m b) -> b -> t a -> m b 
   foldlM f initialState instructions
 
-executeInstruction :: ProgramState -> Instruction -> IO ProgramState
-executeInstruction (MkState mem ptr) instruction =
-  case instruction of
-     IncPointer -> pure $ MkState mem (ptr+1)
-     DecPointer -> pure $ MkState mem (ptr-1)
-     IncCell    -> let modifiedMem = incCellValue mem ptr
-                    in pure $ MkState modifiedMem ptr
+instance BFState ProgramState where
+  executeInstruction :: ProgramState -> Instruction -> IO ProgramState
+  executeInstruction (MkState mem ptr) instruction =
+    case instruction of
+       IncPointer -> pure $ MkState mem (ptr+1)
+       DecPointer -> pure $ MkState mem (ptr-1)
+       IncCell    -> let modifiedMem = incCellValue mem ptr
+                      in pure $ MkState modifiedMem ptr
 
-     DecCell    -> let modifiedMem = decCellValue mem ptr
-                    in pure $ MkState modifiedMem ptr
+       DecCell    -> let modifiedMem = decCellValue mem ptr
+                      in pure $ MkState modifiedMem ptr
 
-     GetChar    -> let modifiedMem = gChar mem ptr
-                    in (`MkState` ptr) <$> modifiedMem
+       GetChar    -> let modifiedMem = gChar '\0' mem ptr
+                      in (`MkState` ptr) <$> modifiedMem
 
-     PutChar    -> pChar mem ptr
-                >> pure (MkState mem ptr )
+       PutChar    -> pChar mem ptr
+                  >> pure (MkState mem ptr )
 
-     Loop prog  ->  loop prog (MkState mem ptr)
+       Loop prog  -> loop prog (MkState mem ptr)
 
-  where  loop :: Program -> ProgramState -> IO ProgramState
-         loop loopProg pST@(MkState loopMem loopPtr') =
-          if currentCellIsZero loopMem loopPtr'
-          then pure pST -- exits loop
-          else interpret' pST loopProg >>=  loop loopProg
+    where loop :: Program -> ProgramState -> IO ProgramState
+          loop loopProg pST@(MkState loopMem loopPtr') =
+            if currentCellIsZero loopMem loopPtr'
+            then pure pST -- exits loop
+            else interpret' pST loopProg >>= loop loopProg
+
+          gChar :: Char -> Memory -> Pointer -> IO Memory
+          gChar _ gmem gptr = do
+            charVal <- fromIntegral . fromEnum <$> getChar
+            putStrLn ""
+            let modifiedMem = gmem V.// [(gptr, charVal)]
+            pure modifiedMem
+
+          pChar :: Memory -> Pointer -> IO ()
+          pChar pmem pptr = do
+            let cellVal = getCurrCellValue  pmem pptr
+            putChar $ (toEnum . fromIntegral) cellVal -- converts to char the cellValue (int)
+
+  initializeState :: Int -- ^ memory size
+                  -> [Char]
+                  -> ProgramState
+  initializeState memSize _ = MkState cells 0
+    where cells = V.replicate memSize 0
+
+instance BFState BenchState where
+  executeInstruction (BenchState input mem ptr) instruction =
+    case instruction of
+       IncPointer -> pure $ BenchState input mem (ptr+1)
+       DecPointer -> pure $ BenchState input mem (ptr-1)
+       IncCell    -> let modifiedMem = incCellValue mem ptr
+                      in pure $ BenchState input modifiedMem ptr
+
+       DecCell    -> let modifiedMem = decCellValue mem ptr
+                      in pure $ BenchState input modifiedMem ptr
+
+       GetChar    -> case input of
+                      (x:xs) -> let modifiedMem = gChar x mem ptr
+                                 in (\m -> BenchState xs m ptr ) <$> modifiedMem
+                      _ -> throw InexistentBenchmarkingInput
+
+       PutChar    -> pChar mem ptr
+                  >> pure (BenchState input mem ptr )
+
+       Loop prog  -> loop prog (BenchState input mem ptr)
+
+    where loop :: Program -> BenchState -> IO BenchState
+          loop loopProg pST@(BenchState _ loopMem loopPtr') =
+            if currentCellIsZero loopMem loopPtr'
+            then pure pST -- exits loop
+            else interpret' pST loopProg >>= loop loopProg
+          gChar :: Char -> Memory -> Pointer -> IO Memory
+          gChar char gmem gptr = pure $ gmem V.// [(gptr, charVal)]
+            where charVal = (fromIntegral . fromEnum) char
+
+          pChar :: Memory -> Pointer -> IO ()
+          pChar _ _ = pure ()
 
 
-interpret' :: ProgramState -> Program -> IO ProgramState
+  initializeState :: Int -> [Char] -> BenchState
+  initializeState memSize input = BenchState input cells 0
+    where cells = V.replicate memSize 0
+
+
+interpret' :: BFState st => st -> Program -> IO st
 interpret' = myFoldM executeInstruction
 
-tryToInterpret :: String -> Int -> IO ()
-tryToInterpret strProgram memSize =
-  either print  (void . interpret' initialState) parsingResult
-  where parsingResult = parseProgram strProgram
-        initialState = initializeState memSize
 
+tryToInterpret :: String -> Int -> [Char] -> IO ()
+tryToInterpret strProgram memSize preEnteredInput = case preEnteredInput of
+  [] -> run doNotBench
+  _  -> run doBench
+  where
+        doBench = void . interpret' (initialState :: BenchState)
+        doNotBench = void. interpret' (initialState :: ProgramState)
+        run rightFunc = either print rightFunc (parseProgram strProgram)
+        initialState :: BFState state => state
+        initialState = initializeState memSize preEnteredInput
 
 
 -- =====================================================================
@@ -85,17 +143,6 @@ incCellValue = modifyCellValue (+)
 decCellValue :: Memory -> Pointer -> Memory
 decCellValue = modifyCellValue (-)
 
-gChar :: Memory -> Pointer -> IO Memory
-gChar mem ptr = do
-  charVal <- fromIntegral . fromEnum <$> getChar
-  putStrLn ""
-  let modifiedMem = mem V.// [(ptr, charVal)]
-  pure modifiedMem
-
-pChar :: Memory -> Pointer -> IO ()
-pChar mem ptr = do
-  let cellVal = getCurrCellValue mem ptr
-  putChar $ (toEnum . fromIntegral) cellVal -- converts to char the cellValue (int)
 
 -- | Helper Function
 getCurrCellValue :: Memory -- ^ the Memory Vector
