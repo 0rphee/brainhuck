@@ -12,7 +12,7 @@ main = do
   programString <- case optsInput of
                      FileInput filePath -> readFile filePath
                      StdInput stdinStr -> pure stdinStr
-  tryToInterpret programString optsSize
+  tryToInterpret programString optsSize []
   
   
   -- if optsOldInt
