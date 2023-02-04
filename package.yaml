@@ -23,6 +23,7 @@ dependencies:
 - optparse-applicative
 - vector
 - containers
+- primitive
 
 ghc-options:
 - -Wall
@@ -63,7 +64,6 @@ benchmarks:
     dependencies:
     - brainhuck
     - criterion
-    
 
 tests:
   brainhuck-test:

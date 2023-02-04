@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Criterion.Main
-import Brainhuck.NewInterpreter
+import Brainhuck.Interpreter1
 
 type FileName = String
 type Input = String
