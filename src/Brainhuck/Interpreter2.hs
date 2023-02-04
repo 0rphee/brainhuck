@@ -9,7 +9,14 @@ import Data.Foldable (foldlM)
 -- import Brainhuck.Parsing (parseProgram)
 -- import Brainhuck.Types
 import Control.Monad (void)
-import Data.Word
+import Data.Word (Word8)
 
 -- =====================================================================
 -- Types
+
+type MemoryCell = Word8
+
+type AltMem = VU.MVector (PrimState IO) MemoryCell
+
+init' :: Int -> IO (VU.MVector (PrimState IO) Word)
+init' memSize = VU.replicate memSize 0

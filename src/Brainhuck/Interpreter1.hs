@@ -1,40 +1,26 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Brainhuck.Interpreter1 (tryToInterpret) where
 
-import qualified Data.Vector.Unboxed.Mutable as VU
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
-import Control.Monad.Primitive
 import Control.Exception
 import Data.Maybe (fromMaybe)
 import Data.Foldable ( foldlM, toList )
 import Control.Monad (void)
-import Data.Word (Word8)
+import Brainhuck.Types
 
 -- =====================================================================
 -- Types
-
-data BrainhuckException
-  = InexistentCellValueException
-  | InexistentBenchmarkingInput
-  deriving (Show)
-
-instance Exception BrainhuckException
 
 data ParsingError = BracketsNotClosed
   deriving Show
 
 type Pointer = Int
-type MemoryCell = Word8
 
 type Memory = V.Vector MemoryCell
-
-type AltMem = VU.MVector (PrimState IO) MemoryCell
-
-init' :: Int -> IO (VU.MVector (PrimState IO) Word)
-init' memSize = VU.replicate memSize 0
 
 data Instruction
   = IncPointer    --  >
@@ -51,6 +37,8 @@ newtype Prog a = Program (S.Seq a)
 
 type Program = Prog Instruction
 
+instance BFProgram Program
+
 instance Show Program where
   show (Program seqq) = concatMap show $ toList seqq
 
@@ -64,44 +52,13 @@ instance Show Instruction where
   show (Loop prog) = " LOOP["  <> show prog <> "]"
 
 
-class BFMemory mem where
-  gChar :: mem -> Pointer -> IO mem
-  pChar :: mem -> Pointer -> IO ()
-  gCharDebug :: Char -> mem -> Pointer -> IO mem
-  pCharDebug :: mem -> Pointer -> IO ()
-  getCurrCellValue :: mem -> Pointer -> MemoryCell
-
-  currentCellIsZero :: mem -> Pointer -> Bool
-  currentCellIsZero mem ptr = cellValue == 0
-    where cellValue = getCurrCellValue mem ptr 
-
-  modifyCellValue :: (MemoryCell -> MemoryCell -> MemoryCell)
-                  -> mem -> Pointer -> mem
-
-  incCellValue :: mem -> Pointer -> mem
-  incCellValue = modifyCellValue (+)
-
-  decCellValue :: mem -> Pointer -> mem
-  decCellValue = modifyCellValue (+)
-
-
-class BFSTate' state where
-  incPointer :: state -> IO state
-  decPointer :: state -> IO state
-  incCell    :: state -> IO state
-  decCell    :: state -> IO state
-  getCharST  :: Bool -> state -> IO state
-  putCharST  :: Bool -> state -> IO state
-  currentCellIsZeroST :: state -> Bool
-  loopST :: Bool -> Program -> state -> IO state
-  initializeState' :: Int -> String -> state 
+data ProgramState = MkState' [Char] Memory Pointer
 
 -- =====================================================================
 -- Interpret 
-data ProgramState' = MkState' [Char] Memory Pointer
 
-instance BFSTate' ProgramState' where
-  incPointer, decPointer, incCell :: ProgramState' -> IO ProgramState'
+instance BFSTate' ProgramState where
+  incPointer, decPointer, incCell :: ProgramState -> IO ProgramState
   incPointer (MkState' input mem ptr) = pure $ MkState' input mem (ptr+1)
   decPointer (MkState' input mem ptr) = pure $ MkState' input mem (ptr-1)
   incCell    (MkState' input mem ptr) = let modifiedMem = incCellValue mem ptr
@@ -139,19 +96,18 @@ executeInstruction' debugOn state instruction =
      PutChar    -> putCharST debugOn state
      Loop prog  -> loopST debugOn prog state
 
-interpret :: BFSTate' st => Bool -> st -> Program -> IO st
+interpret :: (BFSTate' st) => Bool -> st -> prog -> IO st
 interpret debugOn = foldlM (executeInstruction' debugOn)
 
 tryToInterpret :: String -> Int -> [Char] -> IO ()
 tryToInterpret strProgram memSize preEnteredInput = case preEnteredInput of
   [] -> run doNotBench
   _  -> run doBench
-  where doBench = void . interpret True (initialState :: ProgramState')
-        doNotBench = void. interpret False (initialState :: ProgramState')
+  where doBench = void . interpret True (initialState :: ProgramState)
+        doNotBench = void. interpret False (initialState :: ProgramState)
         run rightFunc = either print rightFunc (parseProgram strProgram)
         initialState :: BFSTate' state => state
         initialState = initializeState' memSize preEnteredInput
-
 
 -- =====================================================================
 -- Execution of Brainfuck operations 
@@ -167,9 +123,6 @@ instance BFMemory Memory where
   pChar :: Memory -> Pointer -> IO ()
   pChar mem ptr = putChar $ (toEnum . fromIntegral) cellVal
     where cellVal = getCurrCellValue mem ptr
-
-  pCharDebug :: Memory -> Pointer -> IO ()
-  pCharDebug _ _ = pure ()
 
   gCharDebug :: Char -> Memory -> Pointer -> IO Memory
   gCharDebug char mem ptr = pure modifiedMem
@@ -196,8 +149,6 @@ instance BFMemory Memory where
     -> MemoryCell
   getCurrCellValue mem ptr
     = fromMaybe (throw InexistentCellValueException) (mem V.!? ptr)
-
-
 
 -- =====================================================================
 -- Parsing
