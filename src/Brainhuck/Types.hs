@@ -1,13 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE KindSignatures #-}
+
 module Brainhuck.Types where
 
-import qualified Data.Vector.Unboxed.Mutable as VU
-import qualified Data.Sequence as S
+import Data.Kind (Type)
 import Control.Exception
-import Control.Monad.Primitive
-import Data.Word (Word8)
-
 
 data BrainhuckException
   = InexistentCellValueException
@@ -16,32 +14,30 @@ data BrainhuckException
 
 instance Exception BrainhuckException
 
-type MemoryCell = Word8
+class (Num cell, Eq cell) => 
+      BFMemory (mem :: Type -> Type) (cell :: Type) where
 
-data family Memor 
+  gChar            :: mem cell -> ptr -> IO (mem cell)
+  pChar            :: mem cell -> ptr -> IO ()
+  gCharDebug       :: Char -> mem cell  -> ptr -> IO (mem cell)
+  getCurrCellValue :: mem cell -> ptr -> cell
+  modifyCellValue :: (cell -> cell -> cell)
+                  -> mem cell -> ptr -> mem cell
 
-class BFMemory mem cell where
-  gChar :: mem -> ptr -> IO mem
-  pChar :: mem -> ptr -> IO ()
-  gCharDebug :: Char -> mem -> ptr -> IO mem
-  pCharDebug :: mem -> ptr -> IO ()
-  pCharDebug _ _ = pure ()
-  getCurrCellValue :: mem -> ptr -> cell
+  pCharDebug       :: mem cell-> ptr -> IO ()
+  pCharDebug _ _   = pure ()
 
-  currentCellIsZero :: mem -> ptr -> Bool
+  currentCellIsZero :: mem cell -> ptr -> Bool
   currentCellIsZero mem ptr = cellValue == 0
     where cellValue = getCurrCellValue mem ptr
 
-  modifyCellValue :: (MemoryCell -> MemoryCell -> MemoryCell)
-                  -> mem -> ptr-> mem
-
-  incCellValue :: mem -> ptr -> mem
+  incCellValue :: mem cell -> ptr -> mem cell
   incCellValue = modifyCellValue (+)
 
-  decCellValue :: mem -> ptr -> mem
+  decCellValue :: mem cell -> ptr -> mem cell
   decCellValue = modifyCellValue (+)
 
-class BFSTate' state where
+class BFSTate state where
   incPointer :: state -> IO state
   decPointer :: state -> IO state
   incCell    :: state -> IO state
