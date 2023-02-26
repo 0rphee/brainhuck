@@ -1,26 +1,23 @@
-module Brainhuck.Types
-  (
-    BrainhuckException(..)
-  , ParsingError(..)
-  , Pointer
-  , MemoryCell
-  , Memory
-  , Instruction(..)
-  , Program(..)
-  , ProgramState(..)
-  , BFState (..)
-  , BenchState(..)
-  )
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE DeriveFunctor #-}
+
+module Brainhuck.Types ( BFMemory(..),
+                         Instruction(..),
+                         Pointer,
+                         BrainhuckException(..),
+                         interpret,
+                         BFState(..),
+                         BFInstructionList,
+                         BFTestMonad(..),
+                         BFMonad(..) )
   where
 
-import qualified Data.Sequence as S
-import qualified Data.Vector as V
-import Data.Word (Word8)
-import Data.Foldable (toList)
+import Data.Kind (Type)
 import Control.Exception
-
--- =====================================================================
--- Types
+import Data.Foldable (foldlM)
 
 data BrainhuckException
   = InexistentCellValueException
@@ -29,43 +26,91 @@ data BrainhuckException
 
 instance Exception BrainhuckException
 
-data ParsingError = BracketsNotClosed
-  deriving Show
-
 type Pointer = Int
-type MemoryCell = Word8
 
-type Memory = V.Vector MemoryCell
+data Instruction where
+  IncPointer :: Instruction   --  >
+  DecPointer :: Instruction   --  <
+  IncCell    :: Instruction   --  +
+  DecCell    :: Instruction   --  -
+  GetChar    :: Instruction   --  ,
+  PutChar    :: Instruction   --  .
+  Loop       :: BFInstructionList t => t Instruction -> Instruction
 
-data Instruction
-  = IncPointer    --  >
-  | DecPointer    --  <
-  | IncCell       --  +
-  | DecCell       --  -
-  | GetChar       --  ,
-  | PutChar       --  .
-  | Loop Program  --  [
+data BFTestMonad a = MkBFTestMonad !a
+  deriving Functor
 
-newtype Program = Program (S.Seq Instruction)
+instance Applicative BFTestMonad where
+  pure = MkBFTestMonad
+  (MkBFTestMonad f) <*> (MkBFTestMonad a) = MkBFTestMonad $ f a
 
-instance Show Program where
-  show (Program seqq) = concatMap show $ toList seqq
+instance Monad BFTestMonad where
+  (MkBFTestMonad a) >>= f = f a
 
-instance Show Instruction where
-  show IncPointer  = ">"
-  show DecPointer  = "<"
-  show IncCell     = "+"
-  show DecCell     = "-"
-  show GetChar     = ","
-  show PutChar     = "."
-  show (Loop prog) = " LOOP["  <> show prog <> "]"
+instance BFMonad BFTestMonad where
+  exitToIO (MkBFTestMonad a) = return a
+instance BFMonad IO where
+  exitToIO = id
 
-class BFState state where
-  executeInstruction :: state -> Instruction -> IO state
-  initializeState :: Int -> String -> state
 
-data BenchState = BenchState String Memory Pointer
+class Monad m => BFMonad m where
+  exitToIO :: m a -> IO a
 
-data ProgramState
-  = MkState Memory Pointer
 
+class (Num cell, Eq cell) =>
+      BFMemory (mem :: Type) (cell :: Type) | mem -> cell where
+
+  gChar            :: mem -> Pointer -> IO mem
+  pChar            :: mem -> Pointer -> IO ()
+
+  gCharDebug       :: Char -> mem -> Pointer -> mem
+
+  getCurrCellValue :: mem -> Pointer -> cell
+
+  modifyCellValue  :: (cell -> cell -> cell)
+                   -> mem -> Pointer -> mem
+
+  currentCellIsZero :: mem -> Pointer -> Bool
+  currentCellIsZero mem ptr = cellValue == 0
+    where cellValue = getCurrCellValue mem ptr
+
+  incCellValue :: mem -> Pointer -> mem
+  incCellValue = modifyCellValue (+)
+
+  decCellValue :: mem -> Pointer -> mem
+  decCellValue = modifyCellValue (+)
+
+class Foldable f => BFInstructionList f
+
+class BFMonad m => BFState m state | state -> m where
+  incPointer :: state -> m state
+  decPointer :: state -> m state
+  incCell    :: state -> m state
+  decCell    :: state -> m state
+  getCharST  :: state -> m state
+  putCharST  :: state -> m state
+  currentCellIsZeroST :: state -> Bool
+  -- initializeState' :: Int -> String {- The input if the state debugs -} -> state
+
+executeInstruction :: (BFState m state)
+                    => state -> Instruction -> m state
+executeInstruction state instruction =
+  case instruction of
+     IncPointer -> incPointer state
+     DecPointer -> decPointer state
+     IncCell    -> incCell state
+     DecCell    -> decCell state
+     GetChar    -> getCharST state
+     PutChar    -> putCharST state
+     Loop prog  -> loopST prog state
+
+loopST :: (BFInstructionList program, BFState m state)
+       => program Instruction -> state -> m state
+loopST  program pST =
+  if currentCellIsZeroST pST
+  then pure pST -- exits loop
+  else interpret pST program >>= loopST program
+
+interpret :: (BFInstructionList t, BFState m state)
+          => state -> t Instruction -> m state
+interpret = foldlM executeInstruction

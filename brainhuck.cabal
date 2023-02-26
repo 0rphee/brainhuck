@@ -22,9 +22,9 @@ source-repository head
 
 library
   exposed-modules:
-      Brainhuck.NewInterpreter
+      Brainhuck.Interpreter1
+      Brainhuck.Interpreter2
       Brainhuck.Options
-      Brainhuck.Parsing
       Brainhuck.Types
   other-modules:
       Paths_brainhuck
@@ -35,6 +35,7 @@ library
       base >=4.7 && <5
     , containers
     , optparse-applicative
+    , primitive
     , vector
   default-language: Haskell2010
 
@@ -50,6 +51,7 @@ executable brainhuck
     , brainhuck
     , containers
     , optparse-applicative
+    , primitive
     , vector
   default-language: Haskell2010
 
@@ -66,6 +68,7 @@ test-suite brainhuck-test
     , brainhuck
     , containers
     , optparse-applicative
+    , primitive
     , vector
   default-language: Haskell2010
 
@@ -83,5 +86,7 @@ benchmark brainhuck-benchmarks
     , containers
     , criterion
     , optparse-applicative
+    , primitive
+    , time
     , vector
   default-language: Haskell2010
