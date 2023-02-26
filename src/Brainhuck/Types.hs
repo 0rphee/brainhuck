@@ -37,7 +37,7 @@ data Instruction where
   PutChar    :: Instruction   --  .
   Loop       :: BFInstructionList t => t Instruction -> Instruction
 
-newtype BFTestMonad a = MkBFTestMonad a
+data BFTestMonad a = MkBFTestMonad !a
   deriving Functor
 
 instance Applicative BFTestMonad where

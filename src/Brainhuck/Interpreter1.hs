@@ -19,6 +19,7 @@ import           Brainhuck.Types   ( BFMemory(..),
                                      BrainhuckException(..),
                                      interpret,
                                      BFState(..),
+                                     BFTestMonad(..),
                                      BFInstructionList, exitToIO )
 import Control.Monad (void)
 
@@ -51,7 +52,7 @@ data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
 
 instance BFInstructionList InstructionSeq
 
-instance BFState IO ProgramStateDebug where
+instance BFState BFTestMonad ProgramStateDebug where
   incPointer (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr+1)
   decPointer (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr-1)
   incCell    (MkStateDebug input mem ptr) = let modifiedMem = incCellValue mem ptr
