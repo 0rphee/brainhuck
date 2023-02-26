@@ -10,7 +10,7 @@ type MemSize = Int
 genBenchmark :: (FileName, MemSize, Input) -> IO Benchmark
 genBenchmark (fileName, memSize, input) = do
   strFromFile <- readFile $ "bf/" ++ fileName
-  pure $ bench ("INTERPRET: " ++ fileName) (whnfIO (tryToInterpret strFromFile memSize input))
+  pure $ bench ("INTERPRET: " ++ fileName) $ whnfIO (tryToInterpret strFromFile (initializeState' memSize input))
 
 genListOfBenchmarks :: [(FileName, MemSize, Input)] -> IO [Benchmark]
 genListOfBenchmarks = mapM genBenchmark

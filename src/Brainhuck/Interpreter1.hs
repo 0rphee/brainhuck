@@ -8,13 +8,20 @@ module Brainhuck.Interpreter1 (tryToInterpret, initializeState') where
 
 import qualified Data.Sequence     as S
 import qualified Data.Vector       as V
-import           Data.Maybe        (fromMaybe)
-import           Data.Word         (Word8)
+import           Data.Maybe        ( fromMaybe )
+import           Data.Word         ( Word8 )
 
-import           Control.Monad     (void)
-import           Control.Exception
+import           Control.Monad     ( void )
+import           Control.Exception ( throw )
 
-import           Brainhuck.Types
+import           Brainhuck.Types   ( BFMemory(..),
+                                     Instruction(..),
+                                     Pointer,
+                                     BrainhuckException(..),
+                                     interpret,
+                                     BFState(..),
+                                     BFInstructionList,
+                                     BFTestMonad )
 
 -- =====================================================================
 -- Types
@@ -35,7 +42,7 @@ newtype InstructionSeq a = MkInstructionSeq (S.Seq a) deriving Foldable
 type Program = InstructionSeq Instruction
 
 
-data ProgramState = MkState' Memory Pointer
+data ProgramState = MkState Memory Pointer
 
 -- TODO: make BFState instance
 data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
@@ -45,24 +52,41 @@ data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
 
 instance BFInstructionList InstructionSeq
 
-instance BFState IO ProgramState where
-  incPointer (MkState' mem ptr) = pure $ MkState' mem (ptr+1)
-  decPointer (MkState' mem ptr) = pure $ MkState' mem (ptr-1)
-  incCell    (MkState' mem ptr) = let modifiedMem = incCellValue mem ptr
-                                        in pure $ MkState' modifiedMem ptr
-  decCell    (MkState' mem ptr) = let modifiedMem = decCellValue mem ptr
-                                  in pure $ MkState' modifiedMem ptr
-  getCharST (MkState' mem ptr) = do
-    modifiedMem <- gChar mem ptr
-    pure $ MkState' modifiedMem ptr
+instance BFState BFTestMonad ProgramStateDebug where
+  incPointer (MkStateDebug input mem ptr) = pure $ MkStateDebug input mem (ptr+1)
+  decPointer (MkStateDebug input mem ptr) = pure $ MkStateDebug input mem (ptr-1)
+  incCell    (MkStateDebug input mem ptr) = let modifiedMem = incCellValue mem ptr
+                                       in pure $ MkStateDebug input modifiedMem ptr
+  decCell    (MkStateDebug input mem ptr) = let modifiedMem = decCellValue mem ptr
+                                 in pure $ MkStateDebug input modifiedMem ptr
+  getCharST (MkStateDebug input mem ptr) = case input of
+    [] -> throw InexistentBenchmarkingInput
+    (x:xs) -> let modifiedMem = gCharDebug x mem ptr
+              in pure $ MkStateDebug xs modifiedMem ptr
+  putCharST = pure
+  currentCellIsZeroST (MkStateDebug _ mem ptr) = currentCellIsZero mem ptr
+  initializeState' memSize input = MkStateDebug input cells 0
+    where cells = MkMemoryVector $ V.replicate memSize 0
 
-  putCharST st@(MkState' mem ptr) = pChar mem ptr >> pure st
-  currentCellIsZeroST (MkState' mem ptr) = currentCellIsZero mem ptr
-  initializeState' memSize _ = MkState' cells 0
+
+instance BFState IO ProgramState where
+  incPointer (MkState mem ptr) = pure $ MkState mem (ptr+1)
+  decPointer (MkState mem ptr) = pure $ MkState mem (ptr-1)
+  incCell    (MkState mem ptr) = let modifiedMem = incCellValue mem ptr
+                                       in pure $ MkState modifiedMem ptr
+  decCell    (MkState mem ptr) = let modifiedMem = decCellValue mem ptr
+                                 in pure $ MkState modifiedMem ptr
+  getCharST (MkState mem ptr) = do
+    modifiedMem <- gChar mem ptr
+    pure $ MkState modifiedMem ptr
+
+  putCharST st@(MkState mem ptr) = pChar mem ptr >> pure st
+  currentCellIsZeroST (MkState mem ptr) = currentCellIsZero mem ptr
+  initializeState' memSize _ = MkState cells 0
     where cells = MkMemoryVector $ V.replicate memSize 0
 
 tryToInterpret :: String -> ProgramState -> IO ()
-tryToInterpret programString state 
+tryToInterpret programString state
   = either print (void . interpret state) (parseProgram programString  )
 
 -- =====================================================================
@@ -78,7 +102,7 @@ instance BFMemory Memory MemoryCell where
   pChar mem ptr = putChar $ (toEnum . fromIntegral) cellVal
     where cellVal = getCurrCellValue mem ptr
 
-  gCharDebug char (MkMemoryVector mem) ptr = pure (MkMemoryVector modifiedMem)
+  gCharDebug char (MkMemoryVector mem) ptr = MkMemoryVector modifiedMem
     where charVal = (fromIntegral . fromEnum) char
           modifiedMem = mem V.// [(ptr, charVal)]
 
@@ -111,7 +135,7 @@ parseProgram strProgram = snd <$> go False strProgram (MkInstructionSeq S.empty)
                                         then Left BracketsNotClosed
                                         else Right ("", MkInstructionSeq instructions)
         go  loopOpen (x:xs) (MkInstructionSeq instructions)
-          = let addCommonInstruction inst = go  loopOpen xs $ MkInstructionSeq $ instructions S.|> inst
+          = let addCommonInstruction inst = go loopOpen xs $ MkInstructionSeq $ instructions S.|> inst
              in case x of
                  '>' -> addCommonInstruction IncPointer
                  '<' -> addCommonInstruction DecPointer

@@ -4,7 +4,16 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module Brainhuck.Types where
+module Brainhuck.Types ( BFMemory(..),
+                         Instruction(..),
+                         Pointer,
+                         BrainhuckException(..),
+                         interpret,
+                         pCharDebug,
+                         BFState(..),
+                         BFInstructionList,
+                         BFTestMonad ) 
+  where
 
 import Data.Kind (Type)
 import Control.Exception
@@ -28,25 +37,22 @@ data Instruction where
   PutChar    :: Instruction   --  .
   Loop       :: BFInstructionList t => t Instruction -> Instruction
 
-newtype BFTest a = MkBFTest a
+newtype BFTestMonad a = MkBFTestMonad a
   deriving Functor
 
-instance Applicative BFTest where
-  pure = MkBFTest
-  (MkBFTest f) <*> (MkBFTest a) = MkBFTest $ f a
+instance Applicative BFTestMonad where
+  pure = MkBFTestMonad
+  (MkBFTestMonad f) <*> (MkBFTestMonad a) = MkBFTestMonad $ f a
 
-instance Monad BFTest where
-  (MkBFTest a) >>= f = f a
+instance Monad BFTestMonad where
+  (MkBFTestMonad a) >>= f = f a
 
-instance BFMonad BFTest
+instance BFMonad BFTestMonad
 instance BFMonad IO
 
 
 class Monad m => BFMonad m
 
-
-pCharDebug            :: BFMonad m => m ()
-pCharDebug = pure ()
 
 class (Num cell, Eq cell) =>
       BFMemory (mem :: Type) (cell :: Type) | mem -> cell where
@@ -54,7 +60,7 @@ class (Num cell, Eq cell) =>
   gChar            :: mem -> Pointer -> IO mem
   pChar            :: mem -> Pointer -> IO ()
 
-  gCharDebug       :: BFMonad m => Char -> mem -> Pointer -> m mem
+  gCharDebug       :: Char -> mem -> Pointer -> mem
 
   getCurrCellValue :: mem -> Pointer -> cell
 
