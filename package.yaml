@@ -64,6 +64,7 @@ benchmarks:
     dependencies:
     - brainhuck
     - criterion
+    - time
 
 tests:
   brainhuck-test:

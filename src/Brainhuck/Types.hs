@@ -9,10 +9,10 @@ module Brainhuck.Types ( BFMemory(..),
                          Pointer,
                          BrainhuckException(..),
                          interpret,
-                         exitToIO,
                          BFState(..),
                          BFInstructionList,
-                         BFTestMonad )
+                         BFTestMonad(..),
+                         BFMonad(..) )
   where
 
 import Data.Kind (Type)
@@ -47,13 +47,14 @@ instance Applicative BFTestMonad where
 instance Monad BFTestMonad where
   (MkBFTestMonad a) >>= f = f a
 
-instance BFMonad BFTestMonad
-instance BFMonad IO
+instance BFMonad BFTestMonad where
+  exitToIO (MkBFTestMonad a) = return a
+instance BFMonad IO where
+  exitToIO = id
 
 
 class Monad m => BFMonad m where
-  exitToIO :: m a -> b -> IO b
-  exitToIO _ = return
+  exitToIO :: m a -> IO a
 
 
 class (Num cell, Eq cell) =>
@@ -89,11 +90,11 @@ class BFMonad m => BFState m state | state -> m where
   getCharST  :: state -> m state
   putCharST  :: state -> m state
   currentCellIsZeroST :: state -> Bool
-  initializeState' :: Int -> String {- The input if the state debugs -} -> state
+  -- initializeState' :: Int -> String {- The input if the state debugs -} -> state
 
-executeInstruction' :: (BFState m state)
+executeInstruction :: (BFState m state)
                     => state -> Instruction -> m state
-executeInstruction' state instruction =
+executeInstruction state instruction =
   case instruction of
      IncPointer -> incPointer state
      DecPointer -> decPointer state
@@ -112,4 +113,4 @@ loopST  program pST =
 
 interpret :: (BFInstructionList t, BFState m state)
           => state -> t Instruction -> m state
-interpret = foldlM executeInstruction'
+interpret = foldlM executeInstruction

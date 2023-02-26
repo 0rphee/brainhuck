@@ -1,9 +1,10 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Brainhuck.Interpreter1 (tryToInterpret, initializeState') where
+module Brainhuck.Interpreter1 (tryToInterpret, initializeProgramState, initializeProgramStateDebug) where
 
 import qualified Data.Sequence     as S
 import qualified Data.Vector       as V
@@ -18,8 +19,8 @@ import           Brainhuck.Types   ( BFMemory(..),
                                      BrainhuckException(..),
                                      interpret,
                                      BFState(..),
-                                     BFInstructionList,
-                                     BFTestMonad, exitToIO )
+                                     BFInstructionList, exitToIO )
+import Control.Monad (void)
 
 -- =====================================================================
 -- Types
@@ -50,44 +51,47 @@ data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
 
 instance BFInstructionList InstructionSeq
 
-instance BFState BFTestMonad ProgramStateDebug where
-  incPointer (MkStateDebug input mem ptr) = pure $ MkStateDebug input mem (ptr+1)
-  decPointer (MkStateDebug input mem ptr) = pure $ MkStateDebug input mem (ptr-1)
+instance BFState IO ProgramStateDebug where
+  incPointer (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr+1)
+  decPointer (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr-1)
   incCell    (MkStateDebug input mem ptr) = let modifiedMem = incCellValue mem ptr
-                                       in pure $ MkStateDebug input modifiedMem ptr
+                                             in pure $ MkStateDebug input modifiedMem ptr
   decCell    (MkStateDebug input mem ptr) = let modifiedMem = decCellValue mem ptr
-                                 in pure $ MkStateDebug input modifiedMem ptr
+                                             in pure $ MkStateDebug input modifiedMem ptr
   getCharST (MkStateDebug input mem ptr) = case input of
     [] -> throw InexistentBenchmarkingInput
     (x:xs) -> let modifiedMem = gCharDebug x mem ptr
               in pure $ MkStateDebug xs modifiedMem ptr
   putCharST = pure
   currentCellIsZeroST (MkStateDebug _ mem ptr) = currentCellIsZero mem ptr
-  initializeState' memSize input = MkStateDebug input cells 0
-    where cells = MkMemoryVector $ V.replicate memSize 0
+
+initializeProgramStateDebug :: Int -> [Char] -> ProgramStateDebug
+initializeProgramStateDebug memSize input = MkStateDebug input cells 0
+  where cells = MkMemoryVector $ V.replicate memSize 0
 
 
 instance BFState IO ProgramState where
   incPointer (MkState mem ptr) = pure $ MkState mem (ptr+1)
   decPointer (MkState mem ptr) = pure $ MkState mem (ptr-1)
   incCell    (MkState mem ptr) = let modifiedMem = incCellValue mem ptr
-                                       in pure $ MkState modifiedMem ptr
+                                  in pure $ MkState modifiedMem ptr
   decCell    (MkState mem ptr) = let modifiedMem = decCellValue mem ptr
-                                 in pure $ MkState modifiedMem ptr
+                                  in pure $ MkState modifiedMem ptr
   getCharST (MkState mem ptr) = do
     modifiedMem <- gChar mem ptr
     pure $ MkState modifiedMem ptr
 
   putCharST st@(MkState mem ptr) = pChar mem ptr >> pure st
   currentCellIsZeroST (MkState mem ptr) = currentCellIsZero mem ptr
-  initializeState' memSize _ = MkState cells 0
-    where cells = MkMemoryVector $ V.replicate memSize 0
+
+initializeProgramState :: Int -> ProgramState
+initializeProgramState memSize = MkState cells 0
+  where cells = MkMemoryVector $ V.replicate memSize 0
 
 tryToInterpret :: BFState m state => String -> state -> IO ()
 tryToInterpret programString state = case parseProgram programString of
   Left err -> print err
-  Right prog -> exitToIO (interpret state prog) ()
-
+  Right prog -> void $ exitToIO ( interpret state prog)
 
 -- =====================================================================
 -- Execution of Brainfuck operations 
