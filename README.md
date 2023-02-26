@@ -2,13 +2,13 @@
 
 A Haskell implementation of a Brainfuck interpreter.
 
-The interpeter is implemented as an executable, which can tke the path of Brainfuck
-source code, or using the `--stdin` flag, execute code given as an argument to the 
+The interpeter is implemented as an executable (installed with `stack install` in the directory), which can take 
+the path of Brainfuck source code, or using the `--stdin` flag, execute code given as an argument to the 
 interpeter.
 
 Usage examples:
 
-```
+```bash
 brainhuck path/to/program.b
 
 brainhuck --stdin ">>>>+"
@@ -18,17 +18,15 @@ brainhuck program.b -d -s 100 > debug.txt
 
 Flags/Options:   
 
-```
--s --size               memory size
--d --debug              debug mode
---stdin                 execute code given as an argument
+```bash
+-s --size               # memory size (default: 100 cells)
+--stdin                 # execute code given as an argument
+## -d --debug            # debug mode UNAVAILABLE AT THE MOMENT may return in the future 
 ```
 
-Though this project's README is yet to be more welcoming, I have attempted to document 
-the source code to some extent, and I think it's fairly readable, though maybe not so
-idiomatic, since I'm still a Haskell beginner-intermediate.
+I have yet to to document the source code at least to some extent, nevertheless I think it's fairly readable, 
+though maybe not so idiomatic, since I'm still a Haskell beginner-intermediate.
 
-Currently, I'm in the process of writing a new interface for a "generic?" implementation
-of the interpreter, in order to be able to write the functionality of the interpreter
-from scratch with multiple approaches. (Making it easy to use different data types for
-the memory, etc.)
+This interpreter allows for different datatypes to be used as the memory used, only requiring for each datatype
+a couple of typeclasses, and few more code. 
+
