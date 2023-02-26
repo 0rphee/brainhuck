@@ -13,13 +13,13 @@ brainhuck path/to/program.b
 
 brainhuck --stdin ">>>>+"
 
-brainhuck program.b -d -s 100 > debug.txt
+brainhuck program.b -s 100 > debug.txt
 ```
 
 Flags/Options:   
 
 ```bash
--s --size               # memory size (default: 100 cells)
+-s --size               # memory size (default: 500 cells)
 --stdin                 # execute code given as an argument
 ## -d --debug            # debug mode UNAVAILABLE AT THE MOMENT may return in the future 
 ```

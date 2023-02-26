@@ -53,7 +53,7 @@ size = option auto
   <> short 's'
   <> help "Size of the memory array"
   <> showDefault
-  <> value 100
+  <> value 500
   <> metavar "INT"
   )
 
