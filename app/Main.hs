@@ -12,7 +12,7 @@ main = do
   programString <- case optsInput of
                      FileInput filePath -> readFile filePath
                      StdInput stdinStr -> pure stdinStr
-  tryToInterpret programString (initializeState' optsSize [])
+  tryToInterpret programString (initializeProgramState optsSize)
   
   -- if optsOldInt
   -- then do let sanitziedProgram = filter (`elem` "<>[]+-,.") programString
