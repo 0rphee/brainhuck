@@ -9,10 +9,10 @@ module Brainhuck.Types ( BFMemory(..),
                          Pointer,
                          BrainhuckException(..),
                          interpret,
-                         pCharDebug,
+                         exitToIO,
                          BFState(..),
                          BFInstructionList,
-                         BFTestMonad ) 
+                         BFTestMonad )
   where
 
 import Data.Kind (Type)
@@ -51,7 +51,9 @@ instance BFMonad BFTestMonad
 instance BFMonad IO
 
 
-class Monad m => BFMonad m
+class Monad m => BFMonad m where
+  exitToIO :: m a -> b -> IO b
+  exitToIO _ = return
 
 
 class (Num cell, Eq cell) =>
@@ -79,7 +81,7 @@ class (Num cell, Eq cell) =>
 
 class Foldable f => BFInstructionList f
 
-class BFMonad m => BFState m state | m -> state, state -> m where
+class BFMonad m => BFState m state | state -> m where
   incPointer :: state -> m state
   decPointer :: state -> m state
   incCell    :: state -> m state

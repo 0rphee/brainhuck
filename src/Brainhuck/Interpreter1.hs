@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -11,7 +10,6 @@ import qualified Data.Vector       as V
 import           Data.Maybe        ( fromMaybe )
 import           Data.Word         ( Word8 )
 
-import           Control.Monad     ( void )
 import           Control.Exception ( throw )
 
 import           Brainhuck.Types   ( BFMemory(..),
@@ -21,7 +19,7 @@ import           Brainhuck.Types   ( BFMemory(..),
                                      interpret,
                                      BFState(..),
                                      BFInstructionList,
-                                     BFTestMonad )
+                                     BFTestMonad, exitToIO )
 
 -- =====================================================================
 -- Types
@@ -85,9 +83,11 @@ instance BFState IO ProgramState where
   initializeState' memSize _ = MkState cells 0
     where cells = MkMemoryVector $ V.replicate memSize 0
 
-tryToInterpret :: String -> ProgramState -> IO ()
-tryToInterpret programString state
-  = either print (void . interpret state) (parseProgram programString  )
+tryToInterpret :: BFState m state => String -> state -> IO ()
+tryToInterpret programString state = case parseProgram programString of
+  Left err -> print err
+  Right prog -> exitToIO (interpret state prog) ()
+
 
 -- =====================================================================
 -- Execution of Brainfuck operations 
