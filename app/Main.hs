@@ -1,8 +1,6 @@
 module Main (main) where
 
--- import Brainhuck.Interpreter
-import Brainhuck.Interpreter1
--- import Brainhuck.Parsing
+import Brainhuck.Interpreter2
 import Brainhuck.Options
 import Options.Applicative (execParser)
 
