@@ -1,7 +1,8 @@
 module Main (main) where
 
 import Criterion.Main
-import Brainhuck.Interpreter1
+import qualified Brainhuck.Interpreter1 as I1
+import qualified Brainhuck.Interpreter2 as I2
 import Data.Time.Clock
 import Data.Time.Format
 
@@ -9,10 +10,21 @@ type FileName = String
 type Input = String
 type MemSize = Int
 
+{-  maybe add git hash of the latest commit?
+
+import System.Process
+main = do
+  result <- readProcess "git" ["rev-parse", "HEAD"] []
+  putStrLn result
+
+-}
+
 genBenchmark :: (FileName, MemSize, Input) -> IO Benchmark
 genBenchmark (fileName, memSize, input) = do
   strFromFile <- readFile $ "bf/" ++ fileName
-  pure $ bench ("INTERPRET: " ++ fileName) $ nfAppIO (tryToInterpret strFromFile) (initializeProgramStateDebug memSize input)
+  let firstInterpreter = bench "Boxed Vector" $ nfAppIO (I1.tryToInterpret strFromFile) (I1.initializeProgramStateDebug memSize input)
+  let seconInterpreter = bench "Unboxed Vector" $ nfAppIO (I2.tryToInterpret strFromFile) (I2.initializeProgramStateDebug memSize input)
+  pure $ bgroup ("INTERPRET: " ++ fileName) [firstInterpreter, seconInterpreter]
 genListOfBenchmarks :: [(FileName, MemSize, Input)] -> IO [Benchmark]
 genListOfBenchmarks = mapM genBenchmark
 
@@ -28,4 +40,4 @@ main = do
                                     , ("quine.b", 400, "")
                                     , ("factor.b", 400, "222222\n")
                                     ]
-  defaultMain $ [bgroup formattedTime benchmarks]
+  defaultMain [bgroup formattedTime benchmarks]
