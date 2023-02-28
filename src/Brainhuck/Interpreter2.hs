@@ -12,6 +12,7 @@ import Data.Maybe (fromMaybe)
 import Control.Monad (void)
 import Data.Word (Word8)
 import Brainhuck.Types
+import Data.Text as T
 
 -- =====================================================================
 -- Types
@@ -83,7 +84,7 @@ initializeProgramState :: Int -> ProgramState
 initializeProgramState memSize = MkState cells 0
   where cells = MkMemoryVector $ VU.replicate memSize 0
 
-tryToInterpret :: BFState m state => String -> state -> IO ()
+tryToInterpret :: BFState m state => T.Text -> state -> IO ()
 tryToInterpret programString state = case parseProgram programString of
   Left err -> print err
   Right prog -> void $ exitToIO ( interpret state prog)
@@ -127,15 +128,17 @@ instance BFMemory Memory MemoryCell where
 -- =====================================================================
 -- Parsing
 
-parseProgram :: String -> Either ParsingError Program
+parseProgram :: T.Text -> Either ParsingError Program
 parseProgram strProgram = snd <$> go False strProgram (MkInstructionSeq S.empty)
-  where go :: Bool -> String -> Program -> Either ParsingError (String, Program)
-        go loopOpen [] (MkInstructionSeq instructions) =  if loopOpen  -- if the loop is open, the only valid condition to exit it, is with ']'
-                                        then Left BracketsNotClosed
-                                        else Right ("", MkInstructionSeq instructions)
-        go  loopOpen (x:xs) (MkInstructionSeq instructions)
-          = let addCommonInstruction inst = go loopOpen xs $ MkInstructionSeq $ instructions S.|> inst
-             in case x of
+  where go :: Bool -> T.Text -> Program -> Either ParsingError (T.Text, Program)
+        go loopOpen text (MkInstructionSeq instructions) 
+          = case T.uncons text of
+            Nothing -> if loopOpen
+                       then Left BracketsNotClosed
+                       else Right ("", MkInstructionSeq instructions)
+            Just (x, xs) -> 
+              let addCommonInstruction inst = go loopOpen xs $ MkInstructionSeq $ instructions S.|> inst
+              in case x of
                  '>' -> addCommonInstruction IncPointer
                  '<' -> addCommonInstruction DecPointer
                  '+' -> addCommonInstruction IncCell
@@ -151,5 +154,4 @@ parseProgram strProgram = snd <$> go False strProgram (MkInstructionSeq S.empty)
                         then Right (xs, MkInstructionSeq instructions)
                         else Left BracketsNotClosed
                  _   -> go  loopOpen xs (MkInstructionSeq instructions)
-
 

@@ -5,6 +5,7 @@ import qualified Brainhuck.Interpreter1 as I1
 import qualified Brainhuck.Interpreter2 as I2
 import Data.Time.Clock
 import Data.Time.Format
+import Data.Text as T
 
 type FileName = String
 type Input = String
@@ -22,8 +23,9 @@ main = do
 genBenchmark :: (FileName, MemSize, Input) -> IO Benchmark
 genBenchmark (fileName, memSize, input) = do
   strFromFile <- readFile $ "bf/" ++ fileName
+  let strFromFile' = T.pack strFromFile
   let firstInterpreter = bench "Boxed Vector" $ nfAppIO (I1.tryToInterpret strFromFile) (I1.initializeProgramStateDebug memSize input)
-  let seconInterpreter = bench "Unboxed Vector" $ nfAppIO (I2.tryToInterpret strFromFile) (I2.initializeProgramStateDebug memSize input)
+  let seconInterpreter = bench "Unboxed Vector" $ nfAppIO (I2.tryToInterpret strFromFile') (I2.initializeProgramStateDebug memSize input)
   pure $ bgroup ("INTERPRET: " ++ fileName) [firstInterpreter, seconInterpreter]
 genListOfBenchmarks :: [(FileName, MemSize, Input)] -> IO [Benchmark]
 genListOfBenchmarks = mapM genBenchmark
