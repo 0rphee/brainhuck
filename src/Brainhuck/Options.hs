@@ -23,7 +23,7 @@ options = info (opts <**> helper )
   (  fullDesc
   <> header "Brainhuck - a Brainfuck interpreter written in Haskell"
   )
- 
+
 opts :: Parser Options
 opts = Options <$>{- debug <*>-} size <*> input {-<*> oldInterpreter-}
 
