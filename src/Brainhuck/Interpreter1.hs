@@ -44,7 +44,6 @@ type Program = InstructionSeq Instruction
 
 data ProgramState = MkState Memory Pointer
 
--- TODO: make BFState instance
 data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
 
 -- =====================================================================
