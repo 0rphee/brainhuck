@@ -24,6 +24,7 @@ dependencies:
 - vector
 - containers
 - primitive
+- text
 
 ghc-options:
 - -Wall
@@ -36,6 +37,7 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
+- -XOverloadedStrings
 
 library:
   source-dirs: src
