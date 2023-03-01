@@ -26,6 +26,7 @@ dependencies:
 - primitive
 - text
 - transformers
+- deepseq
 
 ghc-options:
 - -Wall

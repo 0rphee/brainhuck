@@ -36,6 +36,7 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , deepseq
     , optparse-applicative
     , primitive
     , text
@@ -56,6 +57,7 @@ executable brainhuck
       base >=4.7 && <5
     , brainhuck
     , containers
+    , deepseq
     , optparse-applicative
     , primitive
     , text
@@ -77,6 +79,7 @@ test-suite brainhuck-test
       base >=4.7 && <5
     , brainhuck
     , containers
+    , deepseq
     , optparse-applicative
     , primitive
     , text
@@ -99,6 +102,7 @@ benchmark brainhuck-benchmarks
     , brainhuck
     , containers
     , criterion
+    , deepseq
     , optparse-applicative
     , primitive
     , text
