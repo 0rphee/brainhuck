@@ -4,27 +4,40 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module Brainhuck.Types ( BFMemory(..),
-                         Instruction(..),
-                         Pointer,
-                         BrainhuckException(..),
-                         interpret,
-                         BFState(..),
-                         BFInstructionList,
-                         BFTestMonad(..),
-                         BFMonad(..) )
-  where
+module Brainhuck.Types 
+  ( BFMemory(..)
+  , Instruction(..)
+  , Pointer
+  , interpret
+  , BFState(..)
+  , BFInstructionList
+  , BFTestMonad(..)
+  , BFMonad(..)
+  , BrainhuckError(..)
+  , BFParsingError(..)
+  , BFRuntimeError(..)
+  ) where
 
 import Data.Kind (Type)
-import Control.Exception
 import Data.Foldable (foldlM)
+import Control.Monad.Trans.Except
 
-data BrainhuckException
-  = InexistentCellValueException
+
+
+
+data BFParsingError = BracketsNotClosed
+  deriving Show
+
+data BFRuntimeError 
+  = InexistentCellValue
   | InexistentBenchmarkingInput
-  deriving (Show)
+  deriving Show
 
-instance Exception BrainhuckException
+data BrainhuckError
+  = BrainHuckRuntimeError BFRuntimeError 
+  | BrainHuckParsingError BFParsingError
+  deriving Show
+
 
 type Pointer = Int
 
@@ -48,7 +61,7 @@ instance Monad BFTestMonad where
   (MkBFTestMonad a) >>= f = f a
 
 instance BFMonad BFTestMonad where
-  exitToIO (MkBFTestMonad a) = return a
+  exitToIO (MkBFTestMonad a) = return a
 instance BFMonad IO where
   exitToIO = id
 
@@ -61,18 +74,19 @@ class (Num cell, Eq cell) =>
       BFMemory (mem :: Type) (cell :: Type) | mem -> cell where
 
   gChar            :: mem -> Pointer -> IO mem
-  pChar            :: mem -> Pointer -> IO ()
+  pChar            :: mem -> Pointer -> ExceptT BFRuntimeError IO ()
 
   gCharDebug       :: Char -> mem -> Pointer -> mem
 
-  getCurrCellValue :: mem -> Pointer -> cell
+  getCurrCellValue :: mem -> Pointer -> Either BFRuntimeError cell
 
   modifyCellValue  :: (cell -> cell -> cell)
                    -> mem -> Pointer -> mem
 
-  currentCellIsZero :: mem -> Pointer -> Bool
-  currentCellIsZero mem ptr = cellValue == 0
-    where cellValue = getCurrCellValue mem ptr
+  currentCellIsZero :: mem -> Pointer -> Either BFRuntimeError Bool
+  currentCellIsZero mem ptr = do
+    cellValue <- getCurrCellValue mem ptr
+    pure $ cellValue == 0
 
   incCellValue :: mem -> Pointer -> mem
   incCellValue = modifyCellValue (+)
@@ -87,30 +101,32 @@ class BFMonad m => BFState m state | state -> m where
   decPointer :: state -> m state
   incCell    :: state -> m state
   decCell    :: state -> m state
-  getCharST  :: state -> m state
-  putCharST  :: state -> m state
-  currentCellIsZeroST :: state -> Bool
+  getCharST  :: state -> ExceptT BFRuntimeError m state
+  putCharST  :: state -> ExceptT BFRuntimeError m state
+  currentCellIsZeroST :: state -> Either BFRuntimeError Bool
   -- initializeState' :: Int -> String {- The input if the state debugs -} -> state
 
 executeInstruction :: (BFState m state)
-                    => state -> Instruction -> m state
+                    => state -> Instruction -> ExceptT BFRuntimeError m state
 executeInstruction state instruction =
   case instruction of
-     IncPointer -> incPointer state
-     DecPointer -> decPointer state
-     IncCell    -> incCell state
-     DecCell    -> decCell state
+     IncPointer -> ExceptT $ Right <$> incPointer state
+     DecPointer -> ExceptT $ Right <$> decPointer state
+     IncCell    -> ExceptT $ Right <$> incCell state
+     DecCell    -> ExceptT $ Right <$> decCell state
      GetChar    -> getCharST state
      PutChar    -> putCharST state
      Loop prog  -> loopST prog state
 
 loopST :: (BFInstructionList program, BFState m state)
-       => program Instruction -> state -> m state
+       => program Instruction -> state -> ExceptT BFRuntimeError m state
 loopST  program pST =
-  if currentCellIsZeroST pST
-  then pure pST -- exits loop
-  else interpret pST program >>= loopST program
+  case currentCellIsZeroST pST of
+  Left err -> except $ Left err
+  Right cellIsZero -> if cellIsZero
+                      then pure pST -- exits loop
+                      else interpret pST program >>= loopST program
 
 interpret :: (BFInstructionList t, BFState m state)
-          => state -> t Instruction -> m state
+          => state -> t Instruction -> ExceptT BFRuntimeError m state
 interpret = foldlM executeInstruction
