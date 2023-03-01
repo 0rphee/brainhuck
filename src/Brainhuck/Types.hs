@@ -3,9 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
-module Brainhuck.Types 
+module Brainhuck.Types
   ( BFMemory(..)
   , Instruction(..)
   , Pointer
@@ -28,7 +27,7 @@ import Control.DeepSeq
 data BFParsingError = BracketsNotClosed
   deriving Show
 
-data BFRuntimeError 
+data BFRuntimeError
   = InexistentCellValue
   | InexistentBenchmarkingInput
   deriving Show
@@ -37,7 +36,7 @@ instance NFData BFRuntimeError where
   rnf a = seq a ()
 
 data BrainhuckError
-  = BrainHuckRuntimeError BFRuntimeError 
+  = BrainHuckRuntimeError BFRuntimeError
   | BrainHuckParsingError BFParsingError
   deriving Show
 
@@ -45,38 +44,22 @@ data BrainhuckError
 type Pointer = Int
 
 data Instruction where
-  IncPointer  :: Instruction   --  >
-  DecPointer  :: Instruction   --  <
-  IncCell     :: Instruction   --  +
-  DecCell     :: Instruction   --  -
-
-  IncPointer' :: Int -> Instruction   --  >
-  DecPointer' :: Int -> Instruction   --  <
-  IncCell'    :: (Show cell, Num cell) => cell -> Instruction   --  +
-  DecCell'    :: (Show cell, Num cell) => cell -> Instruction   --  -
-
+  ModifyPointer :: Int -> Instruction   --  >
+  ModifyCell    :: Int -> Instruction   --  -
   GetChar     :: Instruction   --  ,
   PutChar     :: Instruction   --  .
   Loop        :: (BFInstructionList t, Show (t Instruction)) => t Instruction -> Instruction
 
-
-
 instance Show Instruction where
-  show IncPointer      = ">"
-  show DecPointer      = "<"
-  show IncCell         = "+"
-  show DecCell         = "-"
-  show (IncPointer' x) = ">" ++ show x
-  show (DecPointer' x) = "<" ++ show x
-  show (IncCell'    x) = "+" ++ show x
-  show (DecCell'    x) = "-" ++ show x
+  show (ModifyPointer x) = '<' : show x ++ ">"
+  show (ModifyCell    x) = '+' : show x ++ "-"
   show GetChar         = ","
   show PutChar         = "."
   show (Loop prog)     = " LOOP["  <> show prog <> "]"
 
 
 data BFTestMonad a = MkBFTestMonad !a
-  deriving Functor
+  deriving (Show, Functor)
 
 instance Applicative BFTestMonad where
   pure = MkBFTestMonad
@@ -105,29 +88,20 @@ class (Num cell, Eq cell) =>
 
   getCurrCellValue :: mem -> Pointer -> Either BFRuntimeError cell
 
-  modifyCellValue  :: (cell -> cell -> cell)
-                   -> mem -> Pointer -> mem
+  modifyCellValue  :: Int -> mem -> Pointer -> mem
 
   currentCellIsZero :: mem -> Pointer -> Either BFRuntimeError Bool
   currentCellIsZero mem ptr = do
     cellValue <- getCurrCellValue mem ptr
     pure $ cellValue == 0
 
-  incCellValue :: mem -> Pointer -> mem
-  incCellValue = modifyCellValue (+)
-
-  decCellValue :: mem -> Pointer -> mem
-  decCellValue = modifyCellValue (+)
-
 class Foldable f => BFInstructionList f
 
 class BFMonad m => BFState m state | state -> m where
-  incPointer :: state -> m state
-  decPointer :: state -> m state
-  incCell    :: state -> m state
-  decCell    :: state -> m state
-  getCharST  :: state -> ExceptT BFRuntimeError m state
-  putCharST  :: state -> ExceptT BFRuntimeError m state
+  modifyPointerST :: Pointer -> state -> m state
+  modifyCellST    :: Int -> state -> m state
+  getCharST     :: state -> ExceptT BFRuntimeError m state
+  putCharST     :: state -> ExceptT BFRuntimeError m state
   currentCellIsZeroST :: state -> Either BFRuntimeError Bool
   -- initializeState' :: Int -> String {- The input if the state debugs -} -> state
 
@@ -135,10 +109,8 @@ executeInstruction :: (BFState m state)
                     => state -> Instruction -> ExceptT BFRuntimeError m state
 executeInstruction state instruction =
   case instruction of
-     IncPointer -> ExceptT $ Right <$> incPointer state
-     DecPointer -> ExceptT $ Right <$> decPointer state
-     IncCell    -> ExceptT $ Right <$> incCell state
-     DecCell    -> ExceptT $ Right <$> decCell state
+     ModifyPointer val -> ExceptT $ Right <$> modifyPointerST val state
+     ModifyCell    val -> ExceptT $ Right <$> modifyCellST val state
      GetChar    -> getCharST state
      PutChar    -> putCharST state
      Loop prog  -> loopST prog state

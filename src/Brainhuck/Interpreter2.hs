@@ -6,9 +6,13 @@
 module Brainhuck.Interpreter2
   (
     runBF
+  , runBF'
+  , tryToInterpret'
   , initializeProgramState
   , initializeProgramStateDebug
   , ProgramStateDebug(..)
+  , optimize
+  , parseProgram'
   ) where
 
 import qualified Data.Vector.Unboxed as VU
@@ -33,6 +37,7 @@ type MemoryCell = Word8
 
 
 newtype MemoryVector a = MkMemoryVector (VU.Vector a)
+  deriving Show
 
 type Memory = MemoryVector MemoryCell
 
@@ -43,25 +48,25 @@ type Program = InstructionSeq Instruction
 
 
 data ProgramState = MkState Memory Pointer
- 
+
 data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
+  deriving Show
 
 instance NFData ProgramStateDebug where
   rnf a = seq a ()
-  
+
 
 -- =====================================================================
 -- Interpret 
 
 instance BFInstructionList InstructionSeq
+instance BFInstructionList InstructionL
 
 instance BFState BFTestMonad ProgramStateDebug where
-  incPointer (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr+1)
-  decPointer (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr-1)
-  incCell    (MkStateDebug input mem ptr) = let modifiedMem = incCellValue mem ptr
-                                             in pure $ MkStateDebug input modifiedMem ptr
-  decCell    (MkStateDebug input mem ptr) = let modifiedMem = decCellValue mem ptr
-                                             in pure $ MkStateDebug input modifiedMem ptr
+  modifyPointerST val (MkStateDebug input mem ptr) =  pure $ MkStateDebug input mem (ptr+val)
+  modifyCellST    val (MkStateDebug input mem ptr)
+    = let modifiedMem = modifyCellValue val mem ptr
+       in pure $ MkStateDebug input modifiedMem ptr
   getCharST (MkStateDebug input mem ptr) = case input of
     [] -> except $ Left InexistentBenchmarkingInput
     (x:xs) -> let modifiedMem = gCharDebug x mem ptr
@@ -70,7 +75,7 @@ instance BFState BFTestMonad ProgramStateDebug where
   --   = case input of
   --     [] -> except $ Left InexistentBenchmarking   
   --     (x:xs) -> 
-  
+
   putCharST = pure
   currentCellIsZeroST (MkStateDebug _ mem ptr) = currentCellIsZero mem ptr
 
@@ -80,12 +85,10 @@ initializeProgramStateDebug memSize input = MkStateDebug input cells 0
 
 
 instance BFState IO ProgramState where
-  incPointer (MkState mem ptr) = pure $ MkState mem (ptr+1)
-  decPointer (MkState mem ptr) = pure $ MkState mem (ptr-1)
-  incCell    (MkState mem ptr) = let modifiedMem = incCellValue mem ptr
-                                  in pure $ MkState modifiedMem ptr
-  decCell    (MkState mem ptr) = let modifiedMem = decCellValue mem ptr
-                                  in pure $ MkState modifiedMem ptr
+  modifyPointerST val (MkState mem ptr) =  pure $ MkState mem (ptr+val)
+  modifyCellST    val (MkState mem ptr)
+    = let modifiedMem = modifyCellValue val mem ptr
+       in pure $ MkState modifiedMem ptr
   getCharST (MkState mem ptr) = do
     modifiedMem <- except $ Right $ gChar mem ptr
     ExceptT $ Right . (`MkState` ptr) <$> modifiedMem
@@ -135,16 +138,12 @@ instance BFMemory Memory MemoryCell where
     where charVal = (fromIntegral . fromEnum) char
           modifiedMem = mem VU.// [(ptr, charVal)]
 
-  modifyCellValue :: (MemoryCell -> MemoryCell -> MemoryCell)
+  modifyCellValue :: Int
                   -> Memory -> Pointer -> Memory
-  modifyCellValue operation (MkMemoryVector mem) ptr =
-    MkMemoryVector $ VU.accum operation mem [(ptr, 1)]
+  modifyCellValue val (MkMemoryVector mem) ptr 
+    | 0 < val = MkMemoryVector $ VU.accum (+) mem [(ptr, fromIntegral val)]
+    | otherwise = MkMemoryVector $ VU.accum (-) mem [(ptr, fromIntegral (negate val))]
 
-  incCellValue :: Memory -> Pointer -> Memory
-  incCellValue = modifyCellValue (+)
-
-  decCellValue :: Memory -> Pointer -> Memory
-  decCellValue = modifyCellValue (-)
 
   getCurrCellValue (MkMemoryVector mem) ptr
     = case mem VU.!? ptr of
@@ -165,10 +164,10 @@ parseProgram strProgram = snd <$> go False strProgram (MkInstructionSeq S.empty)
             Just (x, xs) ->
               let addCommonInstruction inst = go loopOpen xs $ MkInstructionSeq $ instructions S.|> inst
               in case x of
-                 '>' -> addCommonInstruction IncPointer
-                 '<' -> addCommonInstruction DecPointer
-                 '+' -> addCommonInstruction IncCell
-                 '-' -> addCommonInstruction DecCell
+                 '>' -> addCommonInstruction $ ModifyPointer 1
+                 '<' -> addCommonInstruction $ ModifyPointer (negate 1)
+                 '+' -> addCommonInstruction $ ModifyCell 1
+                 '-' -> addCommonInstruction $ ModifyCell (negate 1)
                  ',' -> addCommonInstruction GetChar
                  '.' -> addCommonInstruction PutChar
                  '[' -> case go True xs (MkInstructionSeq S.empty) of
@@ -181,3 +180,63 @@ parseProgram strProgram = snd <$> go False strProgram (MkInstructionSeq S.empty)
                         else Left BracketsNotClosed
                  _   -> go  loopOpen xs (MkInstructionSeq instructions)
 
+newtype InstructionL a = MkInstructionL [a] deriving (Foldable, Show)
+type ProgramL = InstructionL Instruction
+
+parseProgram' :: T.Text -> Either BFParsingError ProgramL
+parseProgram' strProgram = reverse'. snd <$> go False strProgram (MkInstructionL [])
+  where go :: Bool -> T.Text -> ProgramL -> Either BFParsingError (T.Text, ProgramL)
+        go loopOpen text (MkInstructionL instructions)
+          = case T.uncons text of
+            Nothing -> if loopOpen
+                       then Left BracketsNotClosed
+                       else Right ("", MkInstructionL instructions)
+            Just (x, xs) ->
+              let addCommonInstruction inst = go loopOpen xs $ MkInstructionL $ inst : instructions
+              in case x of
+                 '>' -> addCommonInstruction $ ModifyPointer 1
+                 '<' -> addCommonInstruction $ ModifyPointer (negate 1)
+                 '+' -> addCommonInstruction $ ModifyCell 1
+                 '-' -> addCommonInstruction $ ModifyCell (negate 1)
+                 ',' -> addCommonInstruction GetChar
+                 '.' -> addCommonInstruction PutChar
+                 '[' -> case go True xs (MkInstructionL []) of
+                          Right (accum, instructs) ->
+                            go  loopOpen accum $ MkInstructionL $ Loop instructs : instructions
+                          left -> left
+
+                 ']' -> if loopOpen  -- if the loop is open, the only valid condition to exit it, is with ']'
+                        then Right (xs, MkInstructionL instructions)
+                        else Left BracketsNotClosed
+                 _   -> go  loopOpen xs (MkInstructionL instructions)
+        reverse' (MkInstructionL l) = MkInstructionL $ reverse l
+
+optimize :: ProgramL -> ProgramL
+optimize (MkInstructionL l) = MkInstructionL $ go Nothing l
+  where go :: Maybe Instruction -> [Instruction] -> [Instruction]
+        go (Just x) [] = case x of
+          ModifyCell    0 -> []
+          ModifyPointer 0 -> []
+          _               -> [x]
+        go Nothing [] = []
+        go Nothing (x:xs) = go (Just x) xs
+        go (Just x) (y:ys)
+          = case (x, y) of
+            (ModifyPointer 0, _) ->                   go                      Nothing ys
+            (ModifyCell 0   , _) ->                   go                      Nothing ys
+            (ModifyPointer a, ModifyPointer b) ->     go (Just $ ModifyPointer (a+b)) ys
+            (ModifyCell a   , ModifyCell    b) ->     go (Just $ ModifyCell    (a+b)) ys
+            (_              ,               _) -> x : go (Just                    y) ys
+
+
+runBF' :: BFState m state => T.Text -> state -> IO ()
+runBF' programString state = do
+  result <- exitToIO . runExceptT $ tryToInterpret' programString state
+  case result of
+    Left err -> print err
+    Right _  -> pure ()
+
+tryToInterpret' :: BFState m state => T.Text -> state -> ExceptT BrainhuckError m state
+tryToInterpret' programString state = case parseProgram' programString of
+  Left err -> except $ Left $ BrainHuckParsingError err
+  Right prog -> withExceptT BrainHuckRuntimeError (interpret state (optimize prog))

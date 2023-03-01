@@ -27,20 +27,21 @@ genBenchmark (fileName, memSize, input) = do
   strFromFile <- TIO.readFile $ "bf/" ++ fileName
   let firstInterpreter = bench "Boxed Vector" $ nfAppIO (I1.runBF strFromFile) (I1.initializeProgramStateDebug memSize input)
   let seconInterpreter = bench "Unboxed Vector" $ nfAppIO (I2.runBF strFromFile) (I2.initializeProgramStateDebug memSize input)
-  pure $ bgroup ("INTERPRET: " ++ fileName) [firstInterpreter, seconInterpreter]
+  let seconInterpreter' = bench "Unboxed Vector optimized" $ nfAppIO (I2.runBF' strFromFile) (I2.initializeProgramStateDebug memSize input)
+  pure $ bgroup ("INTERPRET: " ++ fileName) [firstInterpreter, seconInterpreter, seconInterpreter']
 
 genListOfBenchmarks :: [(FileName, MemSize, Input)] -> IO [Benchmark]
 genListOfBenchmarks = mapM genBenchmark
 
 benchAction :: Instruction -> Benchmark
-benchAction instruction = 
-  let first = bench "Boxed Vector" $ nfAppIO (\x -> exitToIO . runExceptT $ executeInstruction (I1.initializeProgramStateDebug 2 "a") x) instruction
-      second = bench "Unboxed Vector" $ nfAppIO (\x -> exitToIO . runExceptT $ executeInstruction (I2.initializeProgramStateDebug 2 "a") x) instruction
+benchAction instruction =
+  let first = bench "Boxed Vector" $ nfAppIO (exitToIO . runExceptT . executeInstruction (I1.initializeProgramStateDebug 2 "a")) instruction
+      second = bench "Unboxed Vector" $ nfAppIO (exitToIO . runExceptT . executeInstruction (I2.initializeProgramStateDebug 2 "a")) instruction
   in bgroup ("INTREPRET: " ++ show instruction) [first, second]
 
 actionBenchmarks :: [Benchmark]
-actionBenchmarks 
-  = fmap benchAction [IncPointer,DecPointer, IncCell, DecCell, GetChar, PutChar]
+actionBenchmarks
+  = fmap benchAction [ModifyPointer 1, ModifyPointer (negate 1), ModifyCell (negate 1), ModifyCell 1, GetChar, PutChar]
 
 
 main :: IO ()
@@ -56,5 +57,5 @@ main = do
                                     ]
   defaultMain [
       bgroup formattedTime benchmarks
-    , bgroup formattedTime actionBenchmarks 
+    , bgroup formattedTime actionBenchmarks
     ]
