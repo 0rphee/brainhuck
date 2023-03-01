@@ -3,6 +3,8 @@ module Main (main) where
 import Criterion.Main
 import qualified Brainhuck.Interpreter1 as I1
 import qualified Brainhuck.Interpreter2 as I2
+import Brainhuck.Types
+import Control.Monad.Trans.Except
 import Data.Time.Clock
 import Data.Time.Format
 import qualified Data.Text.IO as TIO
@@ -30,6 +32,16 @@ genBenchmark (fileName, memSize, input) = do
 genListOfBenchmarks :: [(FileName, MemSize, Input)] -> IO [Benchmark]
 genListOfBenchmarks = mapM genBenchmark
 
+benchAction :: Instruction -> Benchmark
+benchAction instruction = 
+  let first = bench "Boxed Vector" $ nfAppIO (\x -> exitToIO . runExceptT $ executeInstruction (I1.initializeProgramStateDebug 2 "a") x) instruction
+      second = bench "Unboxed Vector" $ nfAppIO (\x -> exitToIO . runExceptT $ executeInstruction (I2.initializeProgramStateDebug 2 "a") x) instruction
+  in bgroup ("INTREPRET: " ++ show instruction) [first, second]
+
+actionBenchmarks :: [Benchmark]
+actionBenchmarks 
+  = fmap benchAction [IncPointer,DecPointer, IncCell, DecCell, GetChar, PutChar]
+
 
 main :: IO ()
 main = do
@@ -42,4 +54,7 @@ main = do
                                     , ("quine.b", 400, "")
                                     , ("factor.b", 400, "222222\n")
                                     ]
-  defaultMain [bgroup formattedTime benchmarks]
+  defaultMain [
+      bgroup formattedTime benchmarks
+    , bgroup formattedTime actionBenchmarks 
+    ]
