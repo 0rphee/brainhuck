@@ -3,12 +3,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Brainhuck.Types 
   ( BFMemory(..)
   , Instruction(..)
   , Pointer
-  , interpret
   , BFState(..)
   , BFInstructionList
   , BFTestMonad(..)
@@ -16,14 +16,14 @@ module Brainhuck.Types
   , BrainhuckError(..)
   , BFParsingError(..)
   , BFRuntimeError(..)
+  , interpret
+  , executeInstruction
   ) where
 
 import Data.Kind (Type)
 import Data.Foldable (foldlM)
 import Control.Monad.Trans.Except
-
-
-
+import Control.DeepSeq
 
 data BFParsingError = BracketsNotClosed
   deriving Show
@@ -32,6 +32,9 @@ data BFRuntimeError
   = InexistentCellValue
   | InexistentBenchmarkingInput
   deriving Show
+
+instance NFData BFRuntimeError where
+  rnf a = seq a ()
 
 data BrainhuckError
   = BrainHuckRuntimeError BFRuntimeError 
@@ -48,7 +51,17 @@ data Instruction where
   DecCell    :: Instruction   --  -
   GetChar    :: Instruction   --  ,
   PutChar    :: Instruction   --  .
-  Loop       :: BFInstructionList t => t Instruction -> Instruction
+  Loop       :: (BFInstructionList t, Show (t Instruction)) => t Instruction -> Instruction
+
+instance Show Instruction where
+  show IncPointer  = ">"
+  show DecPointer  = "<"
+  show IncCell     = "+"
+  show DecCell     = "-"
+  show GetChar     = ","
+  show PutChar     = "."
+  show (Loop prog) = " LOOP["  <> show prog <> "]"
+
 
 data BFTestMonad a = MkBFTestMonad !a
   deriving Functor
@@ -61,7 +74,7 @@ instance Monad BFTestMonad where
   (MkBFTestMonad a) >>= f = f a
 
 instance BFMonad BFTestMonad where
-  exitToIO (MkBFTestMonad a) = return a
+  exitToIO (MkBFTestMonad a) = pure a
 instance BFMonad IO where
   exitToIO = id
 

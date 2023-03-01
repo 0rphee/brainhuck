@@ -16,6 +16,7 @@ import Data.Word (Word8)
 import Brainhuck.Types
 import qualified Data.Text as T
 import Control.Monad.Trans.Except
+import Control.DeepSeq
 
 -- =====================================================================
 -- Types
@@ -35,7 +36,7 @@ newtype MemoryVector a = MkMemoryVector (V.Vector a)
 type Memory = MemoryVector MemoryCell
 
 
-newtype InstructionSeq a = MkInstructionSeq (S.Seq a) deriving Foldable
+newtype InstructionSeq a = MkInstructionSeq (S.Seq a) deriving (Foldable, Show)
 
 type Program = InstructionSeq Instruction
 
@@ -44,6 +45,8 @@ data ProgramState = MkState Memory Pointer
 
 data ProgramStateDebug = MkStateDebug [Char] Memory Pointer
 
+instance NFData ProgramStateDebug where
+  rnf a = seq a ()
 -- =====================================================================
 -- Interpret 
 
