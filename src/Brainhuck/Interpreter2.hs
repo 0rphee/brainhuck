@@ -2,28 +2,30 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Brainhuck.Interpreter2 where
+
+module Brainhuck.Interpreter2
+  (
+    runBF
+  , initializeProgramState
+  , initializeProgramStateDebug
+  ) where
 
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Sequence as S
-import Control.Exception
-import Data.Maybe (fromMaybe)
--- import Brainhuck.Parsing (parseProgram)
-import Control.Monad (void)
 import Data.Word (Word8)
 import Brainhuck.Types
-import Data.Text as T
+import qualified Data.Text as T
+import Control.Monad.Trans.Except
 
 -- =====================================================================
 -- Types
 -- type AltMem = VU.MVector (PrimState IO) MemoryCell
 
-init' :: (VU.Unbox a, Num a) => Int -> VU.Vector a
-init' memSize = VU.replicate memSize 0
+-- init' :: (VU.Unbox a, Num a) => Int -> VU.Vector a
+-- init' memSize = VU.replicate memSize 0
 
 
-data ParsingError = BracketsNotClosed
-  deriving Show
+
 
 type MemoryCell = Word8
 
@@ -55,9 +57,14 @@ instance BFState BFTestMonad ProgramStateDebug where
   decCell    (MkStateDebug input mem ptr) = let modifiedMem = decCellValue mem ptr
                                              in pure $ MkStateDebug input modifiedMem ptr
   getCharST (MkStateDebug input mem ptr) = case input of
-    [] -> throw InexistentBenchmarkingInput
+    [] -> except $ Left InexistentBenchmarkingInput
     (x:xs) -> let modifiedMem = gCharDebug x mem ptr
               in pure $ MkStateDebug xs modifiedMem ptr
+  -- getCharST (MkStateDebug input mem ptr) 
+  --   = case input of
+  --     [] -> except $ Left InexistentBenchmarking   
+  --     (x:xs) -> 
+  
   putCharST = pure
   currentCellIsZeroST (MkStateDebug _ mem ptr) = currentCellIsZero mem ptr
 
@@ -74,21 +81,31 @@ instance BFState IO ProgramState where
   decCell    (MkState mem ptr) = let modifiedMem = decCellValue mem ptr
                                   in pure $ MkState modifiedMem ptr
   getCharST (MkState mem ptr) = do
-    modifiedMem <- gChar mem ptr
-    pure $ MkState modifiedMem ptr
+    modifiedMem <- except $ Right $ gChar mem ptr
+    ExceptT $ Right . (`MkState` ptr) <$> modifiedMem
 
-  putCharST st@(MkState mem ptr) = pChar mem ptr >> pure st
+  putCharST st@(MkState mem ptr) = do
+    pChar mem ptr
+    return st
+
   currentCellIsZeroST (MkState mem ptr) = currentCellIsZero mem ptr
 
 initializeProgramState :: Int -> ProgramState
 initializeProgramState memSize = MkState cells 0
   where cells = MkMemoryVector $ VU.replicate memSize 0
 
-tryToInterpret :: BFState m state => T.Text -> state -> IO ()
-tryToInterpret programString state = case parseProgram programString of
-  Left err -> print err
-  Right prog -> void $ exitToIO ( interpret state prog)
 
+runBF :: BFState m state => T.Text -> state -> IO ()
+runBF programString state = do
+  result <- exitToIO . runExceptT $ tryToInterpret programString state
+  case result of
+    Left err -> print err
+    Right _  -> pure ()
+
+tryToInterpret :: BFState m state => T.Text -> state -> ExceptT BrainhuckError m state
+tryToInterpret programString state = case parseProgram programString of
+  Left err -> except $ Left $ BrainHuckParsingError err
+  Right prog -> withExceptT BrainHuckRuntimeError (interpret state prog)
 -- =====================================================================
 -- Execution of Brainfuck operations 
 
@@ -99,16 +116,18 @@ instance BFMemory Memory MemoryCell where
     let modifiedMem = mem VU.// [(ptr, charVal)]
     pure (MkMemoryVector modifiedMem)
 
-  pChar mem ptr = putChar $ (toEnum . fromIntegral) cellVal
-    where cellVal = getCurrCellValue mem ptr
+  pChar mem ptr = do
+   cellVal <- except $ getCurrCellValue mem ptr
+   ExceptT $ Right <$> putChar ((toEnum . fromIntegral) cellVal)
+
+  -- pChar mem ptr = do
+  --   cellVal <- except $ getCurrCellValue mem ptr
+  --   putChar $ (toEnum . fromIntegral) cellVal
+  --   pure ()
 
   gCharDebug char (MkMemoryVector mem) ptr = MkMemoryVector modifiedMem
     where charVal = (fromIntegral . fromEnum) char
           modifiedMem = mem VU.// [(ptr, charVal)]
-
-  currentCellIsZero :: Memory -> Pointer -> Bool
-  currentCellIsZero mem ptr = cellValue == 0
-    where cellValue = getCurrCellValue mem ptr
 
   modifyCellValue :: (MemoryCell -> MemoryCell -> MemoryCell)
                   -> Memory -> Pointer -> Memory
@@ -121,22 +140,23 @@ instance BFMemory Memory MemoryCell where
   decCellValue :: Memory -> Pointer -> Memory
   decCellValue = modifyCellValue (-)
 
-  getCurrCellValue :: Memory -> Pointer -> MemoryCell
   getCurrCellValue (MkMemoryVector mem) ptr
-    = fromMaybe (throw InexistentCellValueException) (mem VU.!? ptr)
+    = case mem VU.!? ptr of
+      Nothing -> Left InexistentCellValue
+      Just cellVal -> Right cellVal
 
 -- =====================================================================
 -- Parsing
 
-parseProgram :: T.Text -> Either ParsingError Program
+parseProgram :: T.Text -> Either BFParsingError Program
 parseProgram strProgram = snd <$> go False strProgram (MkInstructionSeq S.empty)
-  where go :: Bool -> T.Text -> Program -> Either ParsingError (T.Text, Program)
-        go loopOpen text (MkInstructionSeq instructions) 
+  where go :: Bool -> T.Text -> Program -> Either BFParsingError (T.Text, Program)
+        go loopOpen text (MkInstructionSeq instructions)
           = case T.uncons text of
             Nothing -> if loopOpen
                        then Left BracketsNotClosed
                        else Right ("", MkInstructionSeq instructions)
-            Just (x, xs) -> 
+            Just (x, xs) ->
               let addCommonInstruction inst = go loopOpen xs $ MkInstructionSeq $ instructions S.|> inst
               in case x of
                  '>' -> addCommonInstruction IncPointer
