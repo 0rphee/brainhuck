@@ -45,22 +45,34 @@ data BrainhuckError
 type Pointer = Int
 
 data Instruction where
-  IncPointer :: Instruction   --  >
-  DecPointer :: Instruction   --  <
-  IncCell    :: Instruction   --  +
-  DecCell    :: Instruction   --  -
-  GetChar    :: Instruction   --  ,
-  PutChar    :: Instruction   --  .
-  Loop       :: (BFInstructionList t, Show (t Instruction)) => t Instruction -> Instruction
+  IncPointer  :: Instruction   --  >
+  DecPointer  :: Instruction   --  <
+  IncCell     :: Instruction   --  +
+  DecCell     :: Instruction   --  -
+
+  IncPointer' :: Int -> Instruction   --  >
+  DecPointer' :: Int -> Instruction   --  <
+  IncCell'    :: (Show cell, Num cell) => cell -> Instruction   --  +
+  DecCell'    :: (Show cell, Num cell) => cell -> Instruction   --  -
+
+  GetChar     :: Instruction   --  ,
+  PutChar     :: Instruction   --  .
+  Loop        :: (BFInstructionList t, Show (t Instruction)) => t Instruction -> Instruction
+
+
 
 instance Show Instruction where
-  show IncPointer  = ">"
-  show DecPointer  = "<"
-  show IncCell     = "+"
-  show DecCell     = "-"
-  show GetChar     = ","
-  show PutChar     = "."
-  show (Loop prog) = " LOOP["  <> show prog <> "]"
+  show IncPointer      = ">"
+  show DecPointer      = "<"
+  show IncCell         = "+"
+  show DecCell         = "-"
+  show (IncPointer' x) = ">" ++ show x
+  show (DecPointer' x) = "<" ++ show x
+  show (IncCell'    x) = "+" ++ show x
+  show (DecCell'    x) = "-" ++ show x
+  show GetChar         = ","
+  show PutChar         = "."
+  show (Loop prog)     = " LOOP["  <> show prog <> "]"
 
 
 data BFTestMonad a = MkBFTestMonad !a
