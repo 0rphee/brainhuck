@@ -25,6 +25,7 @@ dependencies:
 - containers
 - primitive
 - text
+- transformers
 
 ghc-options:
 - -Wall
