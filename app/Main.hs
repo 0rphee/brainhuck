@@ -12,4 +12,4 @@ main = do
   programString <- case optsInput of
                      FileInput filePath -> TIO.readFile filePath
                      StdInput stdinStr -> pure $ T.pack stdinStr
-  runBF programString (initializeProgramState optsSize)
+  runBF' programString (initializeProgramState optsSize)

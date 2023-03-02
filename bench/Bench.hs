@@ -33,11 +33,11 @@ genBenchmark (fileName, memSize, input) = do
 genListOfBenchmarks :: [(FileName, MemSize, Input)] -> IO [Benchmark]
 genListOfBenchmarks = mapM genBenchmark
 
-benchAction :: Instruction -> Benchmark
+benchAction :: Instruction a -> Benchmark
 benchAction instruction =
-  let first = bench "Boxed Vector" $ nfAppIO (exitToIO . runExceptT . executeInstruction (I1.initializeProgramStateDebug 2 "a")) instruction
+  let {-first = bench "Boxed Vector" $ nfAppIO (exitToIO . runExceptT . executeInstruction (I1.initializeProgramStateDebug 2 "a")) instruction-}
       second = bench "Unboxed Vector" $ nfAppIO (exitToIO . runExceptT . executeInstruction (I2.initializeProgramStateDebug 2 "a")) instruction
-  in bgroup ("INTREPRET: " ++ show instruction) [first, second]
+  in bgroup ("INTREPRET: " ++ show instruction) [{-first,-} second]
 
 actionBenchmarks :: [Benchmark]
 actionBenchmarks
