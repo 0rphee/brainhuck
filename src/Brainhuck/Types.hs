@@ -9,7 +9,7 @@ module Brainhuck.Types
   , Instruction(..)
   , Pointer
   , BFState(..)
-  , BFInstructionList
+  , BFInstructionList(..)
   , BFTestMonad(..)
   , BFMonad(..)
   , BrainhuckError(..)
@@ -23,6 +23,7 @@ import Data.Kind (Type)
 import Data.Foldable (foldlM)
 import Control.Monad.Trans.Except
 import Control.DeepSeq
+import Data.Functor.Classes (Show1 (liftShowsPrec))
 
 data BFParsingError = BracketsNotClosed
   deriving Show
@@ -43,14 +44,14 @@ data BrainhuckError
 
 type Pointer = Int
 
-data Instruction where
-  ModifyPointer :: Int -> Instruction   --  >
-  ModifyCell    :: Int -> Instruction   --  -
-  GetChar     :: Instruction   --  ,
-  PutChar     :: Instruction   --  .
-  Loop        :: (BFInstructionList t, Show (t Instruction)) => t Instruction -> Instruction
+data Instruction t where
+  ModifyPointer :: Int -> Instruction t   --  >
+  ModifyCell    :: Int -> Instruction t  --  -
+  GetChar     :: Instruction t   --  ,
+  PutChar     :: Instruction t   --  .
+  Loop        :: (BFInstructionList t, Show (t (Instruction t))) => t (Instruction t) -> (Instruction t)
 
-instance Show Instruction where
+instance Show (Instruction f) where
   show (ModifyPointer x) = '<' : show x ++ ">"
   show (ModifyCell    x) = '+' : show x ++ "-"
   show GetChar         = ","
@@ -59,7 +60,10 @@ instance Show Instruction where
 
 
 data BFTestMonad a = MkBFTestMonad !a
-  deriving (Show, Functor)
+  deriving (Functor)
+
+instance Show1 BFTestMonad where
+ liftShowsPrec shwsPre _ fixity (MkBFTestMonad a) = shwsPre fixity a 
 
 instance Applicative BFTestMonad where
   pure = MkBFTestMonad
@@ -95,7 +99,8 @@ class (Num cell, Eq cell) =>
     cellValue <- getCurrCellValue mem ptr
     pure $ cellValue == 0
 
-class Foldable f => BFInstructionList f
+class Foldable program => BFInstructionList program where
+  optimize :: program (Instruction program) -> program (Instruction program)
 
 class BFMonad m => BFState m state | state -> m where
   modifyPointerST :: Pointer -> state -> m state
@@ -106,17 +111,17 @@ class BFMonad m => BFState m state | state -> m where
   -- initializeState' :: Int -> String {- The input if the state debugs -} -> state
 
 executeInstruction :: (BFState m state)
-                    => state -> Instruction -> ExceptT BFRuntimeError m state
-executeInstruction state instruction =
-  case instruction of
-     ModifyPointer val -> ExceptT $ Right <$> modifyPointerST val state
-     ModifyCell    val -> ExceptT $ Right <$> modifyCellST val state
-     GetChar    -> getCharST state
-     PutChar    -> putCharST state
-     Loop prog  -> loopST prog state
+                    => state -> Instruction f -> ExceptT BFRuntimeError m state
+executeInstruction state instruction 
+  = case instruction of
+      ModifyPointer val -> ExceptT $ Right <$> modifyPointerST val state
+      ModifyCell    val -> ExceptT $ Right <$> modifyCellST val state
+      GetChar    -> getCharST state
+      PutChar    -> putCharST state
+      Loop prog  -> loopST prog state
 
-loopST :: (BFInstructionList program, BFState m state)
-       => program Instruction -> state -> ExceptT BFRuntimeError m state
+loopST :: (Foldable program, BFState m state)
+       => program (Instruction program) -> state -> ExceptT BFRuntimeError m state
 loopST  program pST =
   case currentCellIsZeroST pST of
   Left err -> except $ Left err
@@ -124,6 +129,6 @@ loopST  program pST =
                       then pure pST -- exits loop
                       else interpret pST program >>= loopST program
 
-interpret :: (BFInstructionList t, BFState m state)
-          => state -> t Instruction -> ExceptT BFRuntimeError m state
+interpret :: (Foldable program, BFState m state)
+          => state -> program (Instruction program) -> ExceptT BFRuntimeError m state
 interpret = foldlM executeInstruction
